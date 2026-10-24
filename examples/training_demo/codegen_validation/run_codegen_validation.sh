@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-# End-to-end codegen dual-arm validation for Qwen3-MoE and DeepSeek-V4.1.
+# End-to-end codegen dual-arm validation for the supported model matrix.
 #
 # Runs, per model, on a single 8-NPU host:
 #
@@ -30,7 +30,8 @@
 #
 # Overridable environment variables:
 #   PYTHON TORCHRUN NPROC TREE_ROOT VAL_ROOT QWEN_CONFIG DSV41_CONFIG
-#   RUN_QWEN RUN_DSV41 LOSS_TOL CLEAN_GENERATED
+#   KIMI_CONFIG RUN_QWEN RUN_DSV41 RUN_KIMI LOSS_TOL
+#   CLEAN_GENERATED
 # ============================================================================
 set -euo pipefail
 
@@ -43,8 +44,10 @@ TREE_ROOT="${TREE_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 VAL_ROOT="${VAL_ROOT:-/home/lxy/codegen_reval/val}"
 QWEN_CONFIG="${QWEN_CONFIG:-/home/lxy/qwen3_30b_a3b_4L}"
 DSV41_CONFIG="${DSV41_CONFIG:-/home/lxy/DeepSeek-V4.1-Flash}"
+KIMI_CONFIG="${KIMI_CONFIG:-/home/lxy/probe_ckpts/kimi_k26}"
 RUN_QWEN="${RUN_QWEN:-1}"
 RUN_DSV41="${RUN_DSV41:-1}"
+RUN_KIMI="${RUN_KIMI:-0}"
 LOSS_TOL="${LOSS_TOL:-0.0005}"
 CLEAN_GENERATED="${CLEAN_GENERATED:-1}"
 TRAIN_ITERS=10
@@ -63,13 +66,13 @@ extract_losses() {
     | sort -n | uniq | head -n "$TRAIN_ITERS"
 }
 
-# run_arm <yaml> <log> : run one training arm under torchrun.
+# run_arm <yaml> <log> <module> : run one training arm under torchrun.
 run_arm() {
-  local yaml="$1" log="$2"
+  local yaml="$1" log="$2" module="$3"
   echo "---- running $yaml ----"
   (cd "$TREE_ROOT" && ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
     "$TORCHRUN" --standalone --nproc_per_node="$NPROC" \
-    --module examples.training_demo.train_text "$yaml" > "$log" 2>&1)
+    --module "$module" "$yaml" > "$log" 2>&1)
 }
 
 # check_codegen_criteria <log>: the three mandatory success lines.
@@ -97,12 +100,12 @@ render_arms() {
   fi
 }
 
-# validate_model <tag> <native_yaml> <codegen_yaml> <model_type>: run both
+# validate_model <tag> <native_yaml> <codegen_yaml> <model_type> <module>: run both
 # arms and check all three parts. Assumes the caller already prepared data +
 # rendered YAMLs. The codegen bundle is model-anchored:
 # <TREE_ROOT>/hyper_parallel/models/<model_type>/generated.
 validate_model() {
-  local tag="$1" native_yaml="$2" codegen_yaml="$3" model_type="$4"
+  local tag="$1" native_yaml="$2" codegen_yaml="$3" model_type="$4" module="$5"
   local gen_dir log_cg log_nat
   gen_dir="$TREE_ROOT/hyper_parallel/models/$model_type/generated"
   log_cg="$VAL_ROOT/logs/${tag}_codegen_train.log"
@@ -118,7 +121,7 @@ validate_model() {
   fi
 
   echo "================ $tag: codegen arm ================"
-  if ! run_arm "$codegen_yaml" "$log_cg"; then
+  if ! run_arm "$codegen_yaml" "$log_cg" "$module"; then
     record_fail "$tag/codegen-arm-run"
     tail -30 "$log_cg" || true
     return 1
@@ -146,7 +149,7 @@ validate_model() {
   fi
 
   echo "================ $tag: native arm ================"
-  if ! run_arm "$native_yaml" "$log_nat"; then
+  if ! run_arm "$native_yaml" "$log_nat" "$module"; then
     record_fail "$tag/native-arm-run"
     tail -30 "$log_nat" || true
     return 1
@@ -188,8 +191,9 @@ validate_model() {
 echo "== [0] environment preflight =="
 [ -x "$PYTHON" ] || die "PYTHON not found: $PYTHON"
 [ -x "$TORCHRUN" ] || die "TORCHRUN not found: $TORCHRUN"
-[ -d "$QWEN_CONFIG" ] || die "QWEN_CONFIG not found: $QWEN_CONFIG"
-[ -d "$DSV41_CONFIG" ] || die "DSV41_CONFIG not found: $DSV41_CONFIG"
+if [ "$RUN_QWEN" = "1" ]; then [ -d "$QWEN_CONFIG" ] || die "QWEN_CONFIG not found: $QWEN_CONFIG"; fi
+if [ "$RUN_DSV41" = "1" ]; then [ -d "$DSV41_CONFIG" ] || die "DSV41_CONFIG not found: $DSV41_CONFIG"; fi
+if [ "$RUN_KIMI" = "1" ]; then [ -d "$KIMI_CONFIG" ] || die "KIMI_CONFIG not found: $KIMI_CONFIG"; fi
 # The import check runs from TREE_ROOT so it mirrors how torchrun picks up
 # the checkout (cwd on sys.path), regardless of any stale editable install.
 IMPORT_PATH="$(cd "$TREE_ROOT" && "$PYTHON" -c "import hyper_parallel, os; print(os.path.realpath(hyper_parallel.__file__))")"
@@ -218,11 +222,20 @@ if [ "$RUN_DSV41" = "1" ]; then
       --bucket-base 4096 --parameter-divisor 8)
   fi
 fi
+if [ "$RUN_KIMI" = "1" ] && [ ! -s "$VAL_ROOT/data/kimi_k26/data.json" ]; then
+  (cd "$TREE_ROOT" && "$PYTHON" -m hyper_parallel.models.kimi_k26.recipes.prepare_kimi_vlm_data \
+    --output-dir "$VAL_ROOT/data/kimi_k26" --num-samples 128 --image-size 112)
+fi
+if [ "$RUN_KIMI" = "1" ]; then
+  (cd "$TREE_ROOT" && "$PYTHON" -m examples.training_demo.codegen_validation.kimi_k26_assets \
+    --source "$KIMI_CONFIG" --output "$VAL_ROOT/data/kimi_k26/model_config" \
+    --data "$VAL_ROOT/data/kimi_k26/data.json")
+fi
 record_pass "data/assets"
 
 # ------------------------------------------------------ 2. render arm YAMLs --
 echo "== [2] render dual-arm YAMLs =="
-mkdir -p "$VAL_ROOT/qwen3_moe" "$VAL_ROOT/deepseek_v41"
+mkdir -p "$VAL_ROOT/qwen3_moe" "$VAL_ROOT/deepseek_v41" "$VAL_ROOT/kimi_k26"
 if [ "$RUN_QWEN" = "1" ]; then
   render_arms "$SCRIPT_DIR/qwen3_moe_native.yaml" \
     "$VAL_ROOT/qwen3_moe/train_native.yaml" "$VAL_ROOT/qwen3_moe/train_codegen.yaml" \
@@ -233,18 +246,28 @@ if [ "$RUN_DSV41" = "1" ]; then
     "$VAL_ROOT/deepseek_v41/train_native.yaml" "$VAL_ROOT/deepseek_v41/train_codegen.yaml" \
     "s|__DSV41_CONFIG__|$DSV41_CONFIG|g"
 fi
+if [ "$RUN_KIMI" = "1" ]; then
+  render_arms "$SCRIPT_DIR/kimi_k26_native.yaml" \
+    "$VAL_ROOT/kimi_k26/train_native.yaml" "$VAL_ROOT/kimi_k26/train_codegen.yaml" \
+    "s|__KIMI_CONFIG__|$VAL_ROOT/data/kimi_k26/model_config|g"
+fi
 record_pass "yaml/render+diff-sanity"
 
 # ------------------------------------------------------------- 3-5. validate --
 if [ "$RUN_QWEN" = "1" ]; then
   validate_model qwen3_moe \
     "$VAL_ROOT/qwen3_moe/train_native.yaml" "$VAL_ROOT/qwen3_moe/train_codegen.yaml" \
-    qwen3_moe || true
+    qwen3_moe examples.training_demo.train_text || true
 fi
 if [ "$RUN_DSV41" = "1" ]; then
   validate_model deepseek_v41 \
     "$VAL_ROOT/deepseek_v41/train_native.yaml" "$VAL_ROOT/deepseek_v41/train_codegen.yaml" \
-    deepseek_v41 || true
+    deepseek_v41 examples.training_demo.train_text || true
+fi
+if [ "$RUN_KIMI" = "1" ]; then
+  validate_model kimi_k26 \
+    "$VAL_ROOT/kimi_k26/train_native.yaml" "$VAL_ROOT/kimi_k26/train_codegen.yaml" \
+    kimi_k26 scripts.train_vl || true
 fi
 
 # ---------------------------------------------------------------- 6. report --

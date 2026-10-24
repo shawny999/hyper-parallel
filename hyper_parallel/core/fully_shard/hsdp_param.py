@@ -704,8 +704,18 @@ class HSDPParamV2:
             for numel, dtype in zip(all_gather_input_numels, all_gather_input_dtypes)
         ]
 
+    @torch.no_grad()
     def init_unsharded_param(self) -> None:
-        """Initialize the stable unsharded parameter from its final output storage."""
+        """Initialize the stable unsharded parameter from its final output storage.
+
+        Runs under ``no_grad`` like its siblings (``_init_sharded_param``,
+        ``_get_unsharded_param_data``): the all-gather copy and the
+        ``as_strided`` view are pure data movement for a leaf parameter, not
+        forward computation. Without this, a view materialized inside a
+        no_grad activation-checkpoint region (or vice versa) trips autograd's
+        mixed-mode view check when the buffer has an inplace write from the
+        other mode in its history.
+        """
         if len(self.unsharded_param_buffers) != 1:
             raise AssertionError(
                 f"Expected 1 unsharded_param_buffer, got {len(self.unsharded_param_buffers)}"
