@@ -42,7 +42,7 @@ from hyper_parallel.models._transformers.model_builder import (
 from hyper_parallel.models._transformers.config_resolver import get_hf_config, get_is_hf_model
 from hyper_parallel.distributed.mesh import DistributedSetup
 from hyper_parallel.codegen.modeling_backend import ModelingBackend
-from hyper_parallel.codegen.session import CodegenBuildSession
+from hyper_parallel.codegen.snapshot import CodegenStatus
 from hyper_parallel.models.build_options import get_device_id, get_device_type  # pylint: disable=syntax-error
 from hyper_parallel.models.build_options import CompileConfig
 from hyper_parallel.components.checkpoint.quantized_hf_storage import supports_hf_dequantization
@@ -343,6 +343,7 @@ class _BaseHyperAutoModelClass:
         load_base_model: bool = True,
         verify_hf_weights: Optional[str] = None,
         codegen_config: Optional[Any] = None,
+        codegen_session: Optional[Any] = None,
         **kwargs: Any,
     ) -> PreTrainedModel:
         """HF-compatible from_pretrained entry point.
@@ -411,6 +412,7 @@ class _BaseHyperAutoModelClass:
             activation_swap=activation_swap,
             model_init_dtype=model_init_dtype,
             codegen_artifact_dir=codegen_artifact_dir,
+            codegen_session=codegen_session,
             **kwargs,
         )
         if verify_hf_weights is not None:
@@ -441,6 +443,7 @@ class _BaseHyperAutoModelClass:
         model_init_dtype: Optional[Literal["float16", "bfloat16", "float32"]] = None,
         codegen: bool = False,
         codegen_config: Optional[Any] = None,
+        codegen_session: Optional[Any] = None,
         **kwargs: Any,
     ) -> PreTrainedModel:
         """Build model from PretrainedConfig (no weight loading).
@@ -500,6 +503,7 @@ class _BaseHyperAutoModelClass:
             activation_swap=activation_swap,
             model_init_dtype=model_init_dtype,
             codegen_artifact_dir=codegen_artifact_dir,
+            codegen_session=codegen_session,
             **kwargs,
         )
 
@@ -531,6 +535,7 @@ class _BaseHyperAutoModelClass:
         activation_swap: str = "none",
         model_init_dtype: Optional[Literal["float16", "bfloat16", "float32"]] = None,
         codegen_artifact_dir: Optional[str] = None,
+        codegen_session: Optional[Any] = None,
         **kwargs,
     ) -> PreTrainedModel:
         """Core model building orchestration.
@@ -576,9 +581,9 @@ class _BaseHyperAutoModelClass:
                 **init_kwargs,
             )
 
-        codegen_session = None
-        if backend != ModelingBackend.GEN:
-            codegen_session = CodegenBuildSession()
+        if backend == ModelingBackend.GEN:
+            codegen_session = None
+        if codegen_session is not None:
             model_type = type(model)
             codegen_session.record_source({
                 "model_type": getattr(hf_config, "model_type", None),
@@ -631,6 +636,8 @@ class _BaseHyperAutoModelClass:
         )
 
         if codegen_session is not None:
+            if codegen_session.status is CodegenStatus.COLLECTING:
+                codegen_session.mark_skipped("infrastructure_collection_unavailable")
             model._hp_codegen_snapshot = (  # pylint: disable=protected-access
                 codegen_session.finish()
             )
