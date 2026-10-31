@@ -18,9 +18,7 @@ Following design doc 01_hf_compatibility_layer.md §6.
 Stub — provides from_pretrained/from_config as entry points.
 """
 
-import inspect
 import logging
-import random
 from typing import Any, Literal, Optional, Union
 
 import torch
@@ -38,46 +36,17 @@ from hyper_parallel.models._transformers.model_builder import (
     _init_model,
     apply_model_infrastructure,
     instantiate_infrastructure,
-    observe_model_infrastructure,
 )
 from hyper_parallel.models._transformers.config_resolver import get_hf_config, get_is_hf_model
 from hyper_parallel.distributed.mesh import DistributedSetup
-from hyper_parallel.codegen.hash import file_line_count, sha256_file
-from hyper_parallel.codegen.manager import ensure_codegen_artifact_from_snapshot
-from hyper_parallel.codegen.session import CodegenBuildSession
-from hyper_parallel.codegen.snapshot import CodegenStatus
 from hyper_parallel.models.build_options import (  # pylint: disable=syntax-error
     CompileConfig,
     get_device_id,
     get_device_type,
-    get_torch_device,
 )
-from hyper_parallel.models.build_observer import current_model_build_observation
 from hyper_parallel.components.checkpoint.quantized_hf_storage import supports_hf_dequantization
 
 logger = logging.getLogger(__name__)
-
-_REMOVED_CODEGEN_KWARGS = frozenset({"codegen", "codegen_config", "codegen_artifact_dir", "codegen_session"})
-
-
-def _reject_removed_codegen_kwargs(kwargs: dict[str, Any]) -> None:
-    """Reject removed training-side codegen controls before model dispatch."""
-    removed = sorted(_REMOVED_CODEGEN_KWARGS.intersection(kwargs))
-    if removed:
-        raise TypeError(
-            f"training-side codegen arguments were removed: {removed}; "
-            "use the codegen CLI to build or inspect artifacts"
-        )
-
-
-def _reject_generated_backend(backend: Any) -> None:
-    """Reject the removed generated-model training backend."""
-    if getattr(backend, "value", backend) == "gen":
-        raise ValueError(
-            "the generated-model training backend was removed; "
-            "training always builds the native HF or custom model"
-        )
-
 
 def _current_device() -> torch.device:
     """Return the current accelerator device, or CPU when no accelerator exists."""
@@ -107,7 +76,6 @@ def _model_init_kwargs(
     kwargs: dict[str, Any],
     *,
     load_base_model: bool,
-    preserve_trust_remote_code: bool = False,
 ) -> dict[str, Any]:
     """Drop config/download-only kwargs when constructing directly from config."""
     if load_base_model:
@@ -116,7 +84,6 @@ def _model_init_kwargs(
         key: value
         for key, value in kwargs.items()
         if key not in _CONFIG_ONLY_KWARGS
-        or (preserve_trust_remote_code and key == "trust_remote_code")
     }
 
 
@@ -156,24 +123,6 @@ def _model_init_context(is_meta_device: bool) -> Any:
     return ContextManagers([no_init_weights(), init_empty_weights()]) if is_meta_device else nullcontext()
 
 
-def _config_source_id(config: Any) -> str:
-    """Source identity of a config-only build, for codegen artifact resolution.
-
-    ``AutoConfig.from_pretrained`` records the originating directory in
-    ``_name_or_path``; that identity is what the codegen spec needs to resolve
-    the HuggingFace modeling file.  A config built by hand carries nothing, so
-    fail loudly instead of generating an artifact keyed on an empty source.
-    """
-    source_id = getattr(config, "_name_or_path", None) or getattr(config, "name_or_path", None)
-    if not source_id:
-        raise ValueError(
-            "codegen with from_config requires a config that records its source "
-            "(config._name_or_path); load it with AutoConfig.from_pretrained(path) "
-            "or use from_pretrained()"
-        )
-    return source_id
-
-
 def _load_pretrained_config(
         pretrained_model_name_or_path: str,
         attn_implementation: str,
@@ -203,17 +152,12 @@ def _prepare_pretrained_build(
         kwargs: dict[str, Any],
         force_hf: bool,
         backend: Optional[Any],
-        observation: Optional[Any],
 ) -> tuple[Any, Any, PretrainedConfig, bool, Any]:
     """Prepare infrastructure, HF configuration and the selected modeling backend."""
     # ② Instantiate infrastructure
     sharding_planner, fsdp2_manager = instantiate_infrastructure(
         distributed_setup=distributed_setup,
-        device=(
-            torch.device("meta")
-            if observation is not None and observation.observation_only
-            else _current_device()
-        ),
+        device=_current_device(),
         compile_config=compile_config,
     )
 
@@ -225,56 +169,6 @@ def _prepare_pretrained_build(
     is_hf_model = get_is_hf_model(hf_config, force_hf)
 
     return sharding_planner, fsdp2_manager, hf_config, is_hf_model, backend
-def _finish_codegen_sidecar(
-    session: CodegenBuildSession,
-    artifact_dir: Optional[str],
-    on_published: Optional[Any] = None,
-):
-    """Seal native observations and isolate sidecar publication failures."""
-    cpu_rng_state = torch.get_rng_state()
-    python_rng_state = random.getstate()
-
-    def publish(snapshot: Any) -> None:
-        """Publish one immutable snapshot while preserving training RNG state."""
-        device_rng_state = None
-        set_device_rng_state = None
-        try:
-            device_module = get_torch_device()
-            get_device_rng_state = getattr(device_module, "get_rng_state", None)
-            set_device_rng_state = getattr(device_module, "set_rng_state", None)
-            if get_device_type() != "cpu" and callable(get_device_rng_state):
-                device_rng_state = get_device_rng_state()
-            layout = ensure_codegen_artifact_from_snapshot(snapshot, artifact_dir)
-            if on_published is not None:
-                on_published(layout)
-        finally:
-            torch.set_rng_state(cpu_rng_state)
-            random.setstate(python_rng_state)
-            if device_rng_state is not None and callable(set_device_rng_state):
-                set_device_rng_state(device_rng_state)
-
-    return session.finish(publish)
-
-
-def _finish_offline_observation(
-    session: CodegenBuildSession,
-    artifact_dir: Optional[str],
-    on_published: Optional[Any] = None,
-):
-    """Publish an offline snapshot without querying accelerator state."""
-    cpu_rng_state = torch.get_rng_state()
-    python_rng_state = random.getstate()
-
-    def publish(snapshot: Any) -> None:
-        try:
-            layout = ensure_codegen_artifact_from_snapshot(snapshot, artifact_dir)
-            if on_published is not None:
-                on_published(layout)
-        finally:
-            torch.set_rng_state(cpu_rng_state)
-            random.setstate(python_rng_state)
-
-    return session.finish(publish)
 
 
 class _BaseHyperAutoModelClass:
@@ -355,9 +249,6 @@ class _BaseHyperAutoModelClass:
         ⑤ _build_model → meta + shard + load
         """
         _validate_weight_check_options(verify_hf_weights, load_base_model)
-        _reject_removed_codegen_kwargs(kwargs)
-        _reject_generated_backend(backend)
-        observation = current_model_build_observation()
         if distributed_setup is None:
             distributed_setup = DistributedSetup()
         mesh = distributed_setup.mesh_context
@@ -371,7 +262,6 @@ class _BaseHyperAutoModelClass:
             kwargs,
             force_hf,
             backend,
-            observation,
         )
         sharding_planner, fsdp2_manager, hf_config, is_hf_model, backend = prepared
         # ⑤ Build model
@@ -399,10 +289,6 @@ class _BaseHyperAutoModelClass:
             allow_cache_entry_mutation=allow_cache_entry_mutation,
             activation_swap=activation_swap,
             model_init_dtype=model_init_dtype,
-            build_observer=None if observation is None else observation.observer,
-            observation_artifact_dir=None if observation is None else observation.artifact_dir,
-            publish_codegen=False if observation is None else observation.publish,
-            observation=observation,
             **kwargs,
         )
         if verify_hf_weights is not None:
@@ -440,20 +326,13 @@ class _BaseHyperAutoModelClass:
         No checkpoint is loaded, so the from-config random initialization path
         is preserved.
         """
-        _reject_removed_codegen_kwargs(kwargs)
-        _reject_generated_backend(backend)
-        observation = current_model_build_observation()
         if distributed_setup is None:
             distributed_setup = DistributedSetup()
         mesh = distributed_setup.mesh_context
 
         sharding_planner, fsdp2_manager = instantiate_infrastructure(
             distributed_setup=distributed_setup,
-            device=(
-                torch.device("meta")
-                if observation is not None and observation.observation_only
-                else _current_device()
-            ),
+            device=_current_device(),
             compile_config=compile_config,
         )
         is_hf_model = get_is_hf_model(config, force_hf=False)
@@ -482,10 +361,6 @@ class _BaseHyperAutoModelClass:
             allow_cache_entry_mutation=allow_cache_entry_mutation,
             activation_swap=activation_swap,
             model_init_dtype=model_init_dtype,
-            build_observer=None if observation is None else observation.observer,
-            observation_artifact_dir=None if observation is None else observation.artifact_dir,
-            publish_codegen=False if observation is None else observation.publish,
-            observation=observation,
             **kwargs,
         )
 
@@ -516,10 +391,6 @@ class _BaseHyperAutoModelClass:
         allow_cache_entry_mutation: bool = False,
         activation_swap: str = "none",
         model_init_dtype: Optional[Literal["float16", "bfloat16", "float32"]] = None,
-        build_observer: Optional[Any] = None,
-        observation_artifact_dir: Optional[str] = None,
-        publish_codegen: bool = False,
-        observation: Optional[Any] = None,
         **kwargs,
     ) -> PreTrainedModel:
         """Core model building orchestration.
@@ -537,10 +408,7 @@ class _BaseHyperAutoModelClass:
             hf_config, kwargs.get("quantization_config"), load_base_model=load_base_model,
         )
         defer_hf_load = load_base_model and not quantized_init
-        observation_only = bool(
-            observation is not None and observation.observation_only
-        )
-        is_meta_device = observation_only or (
+        is_meta_device = (
             world_size > 1 or not is_hf_model or defer_hf_load
         ) and not quantized_init
 
@@ -553,7 +421,6 @@ class _BaseHyperAutoModelClass:
         init_kwargs = _model_init_kwargs(
             dict(kwargs),
             load_base_model=init_pretrained_path is not None,
-            preserve_trust_remote_code=observation_only,
         )
         with init_ctx:
             _, model = _init_model(
@@ -568,101 +435,32 @@ class _BaseHyperAutoModelClass:
                 **init_kwargs,
             )
 
-        if build_observer is not None:
-            model_type = type(model)
-            source_path = inspect.getsourcefile(model_type)
-            architectures = list(
-                getattr(hf_config, "architectures", None) or ()
-            )
-            architecture = architectures[0] if architectures else model_type.__name__
-            build_observer.record_source({
-                "model_type": getattr(hf_config, "model_type", None),
-                "architecture": architecture,
-                "architectures": architectures,
-                "model_class": f"{model_type.__module__}:{model_type.__qualname__}",
-                "module_name": model_type.__module__,
-                "file_path": source_path,
-                "sha256": sha256_file(source_path) if source_path else None,
-                "line_count": file_line_count(source_path) if source_path else None,
-                "pretrained_model_name_or_path": (
-                    None
-                    if pretrained_model_name_or_path is None
-                    else str(pretrained_model_name_or_path)
-                ),
-                "is_hf_model": bool(is_hf_model),
-                "backend": str(getattr(backend, "value", backend) or "native"),
-            })
-
         # Step 3-12: Apply infrastructure
-        if observation_only:
-            model = observe_model_infrastructure(
-                model,
-                mesh=mesh,
-                sharding_planner=sharding_planner,
-                distributed_setup=distributed_setup,
-                build_observer=build_observer,
-                is_hf_model=is_hf_model,
-                peft_config=peft_config,
-                qat_config=qat_config,
-                fp8_config=fp8_config,
-                freeze_config=freeze_config,
-                low_precision_config=getattr(distributed_setup, "low_precision_config", None),
-                load_base_model=load_base_model,
-            )
-        else:
-            model = apply_model_infrastructure(
-                model,
-                mesh=mesh,
-                sharding_planner=sharding_planner,
-                fsdp2_manager=fsdp2_manager,
-                peft_config=peft_config,
-                qat_config=qat_config,
-                fp8_config=fp8_config,
-                freeze_config=freeze_config,
-                compile_config=compile_config,
-                is_meta_device=is_meta_device,
-                is_hf_model=is_hf_model,
-                device=_current_device(),
-                load_base_model=load_base_model,
-                pretrained_path=pretrained_model_name_or_path,
-                validate_placement=validate_placement,
-                distributed_setup=distributed_setup,
-                activation_checkpoint=activation_checkpoint,
-                activation_checkpoint_selection=activation_checkpoint_selection,
-                swap_inputs=swap_inputs,
-                allow_cache_entry_mutation=allow_cache_entry_mutation,
-                activation_swap=activation_swap,
-                model_init_dtype=model_init_dtype,
-                build_observer=build_observer,
-                hf_config=hf_config,
-            )
-
-        if build_observer is not None:
-            if build_observer.status is CodegenStatus.COLLECTING:
-                build_observer.mark_skipped("infrastructure_collection_unavailable")
-            on_published = None
-            if observation is not None:
-                on_published = lambda layout: setattr(observation, "artifact_layout", layout)
-            if publish_codegen and observation_only:
-                snapshot = _finish_offline_observation(
-                    build_observer,
-                    observation_artifact_dir,
-                    on_published,
-                )
-            elif publish_codegen:
-                snapshot = _finish_codegen_sidecar(
-                    build_observer,
-                    observation_artifact_dir,
-                    on_published,
-                )
-            else:
-                snapshot = build_observer.finish()
-            model._hp_codegen_snapshot = snapshot  # pylint: disable=protected-access
-            if snapshot.status is CodegenStatus.FAILED:
-                logger.warning(
-                    "codegen sidecar generation failed after native model build: %s",
-                    snapshot.failure.reason,
-                )
+        model = apply_model_infrastructure(
+            model,
+            mesh=mesh,
+            sharding_planner=sharding_planner,
+            fsdp2_manager=fsdp2_manager,
+            peft_config=peft_config,
+            qat_config=qat_config,
+            fp8_config=fp8_config,
+            freeze_config=freeze_config,
+            compile_config=compile_config,
+            is_meta_device=is_meta_device,
+            is_hf_model=is_hf_model,
+            device=_current_device(),
+            load_base_model=load_base_model,
+            pretrained_path=pretrained_model_name_or_path,
+            validate_placement=validate_placement,
+            distributed_setup=distributed_setup,
+            activation_checkpoint=activation_checkpoint,
+            activation_checkpoint_selection=activation_checkpoint_selection,
+            swap_inputs=swap_inputs,
+            allow_cache_entry_mutation=allow_cache_entry_mutation,
+            activation_swap=activation_swap,
+            model_init_dtype=model_init_dtype,
+            hf_config=hf_config,
+        )
 
         model.train()
         return model
