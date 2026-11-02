@@ -46,7 +46,8 @@ YAML 至少要指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以�
 
 ## 2. CLI 命令
 
-Codegen的产物会随着训练启动自动生成，也可以单独生成：
+使用标准 `scripts/train_lm.py` 启动训练时，global rank 0 会在独立的单进程 sidecar 中自动生成产物；
+生成失败会输出原因，但不会中断原生训练。也可以不启动训练，单独生成：
 
 ```bash
 python -m hyper_parallel.codegen --verbose generate \
@@ -78,7 +79,9 @@ generated/
 
 ### 为什么不能用 `torchrun` 生成？
 
-生成只需要一个 Python 进程。多进程会同时写入同一个 bundle，因此 CLI 会要求改用单进程命令。
+这里指不能使用 `torchrun -m hyper_parallel.codegen generate` 直接启动 CLI，否则每个 rank 都会尝试写入同一个
+bundle。正常使用 `torchrun ... scripts/train_lm.py` 启动训练不受影响：Trainer 入口只让 global rank 0 启动一个
+单进程 Codegen sidecar，其余 rank 不执行生成。
 
 ### 是否需要下载完整模型？
 
