@@ -41,7 +41,12 @@ def replacement_records_from_snapshot(snapshot: Any) -> tuple[dict[str, Any], ..
             raise ValueError(
                 f"replacement application references unknown rule_id {rule_id!r}"
             )
-        source_type = declaration["source_type"].replace(":", ".", 1)
+        source_identity = application.get("source_type") or declaration.get("source_type")
+        if not isinstance(source_identity, str) or not source_identity:
+            raise ValueError(
+                f"replacement application {rule_id!r} has no resolved source_type"
+            )
+        source_type = source_identity.replace(":", ".", 1)
         record = {
             "match": list(declaration["match"]),
             "fqn": application["primary_fqn"],

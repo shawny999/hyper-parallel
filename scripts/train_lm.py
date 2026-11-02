@@ -17,13 +17,11 @@
 from hyper_parallel.trainer.config.parser import parse_training_args
 from hyper_parallel.trainer.config import TrainerConfig
 from hyper_parallel.trainer.text_trainer import TextTrainer
-from hyper_parallel.codegen.train_sidecar import start_codegen_sidecar
 
 
 def main() -> None:
     """Resolve configured components and execute language-model training."""
     config: TrainerConfig = parse_training_args()
-    start_codegen_sidecar(config._yaml_path)  # pylint: disable=protected-access
     trainer = TextTrainer(config)
     trainer.train()
 

@@ -337,8 +337,10 @@ def compile_module_replacements(
     return ModuleReplacementPlan(targets, specs)
 
 
-def _symbol_path(symbol: Any) -> str:
+def _symbol_path(symbol: Any) -> str | None:
     """Return a stable import-like identity without retaining the symbol."""
+    if symbol is None:
+        return None
     return f"{symbol.__module__}:{symbol.__qualname__}"
 
 

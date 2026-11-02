@@ -102,3 +102,23 @@ Transformers 正常识别。自定义 remote code 模型还需要对应的 Pytho
 
 部分官方模型会把顶层模型和子模型拆在不同源码文件中。Codegen 保留这种依赖关系，并为每个被修改的 modeling 文件
 生成对应 diff；它们仍属于同一个 bundle。
+
+### DeepSeek-V4.1 训练时报 Multicore 或 MegaMoE 动态库错误
+
+这不是 Codegen 专属错误：原生模型和生成模型都会使用 DeepSeek-V4.1 的 Multicore/MegaMoE native 扩展。请确认编译与
+训练使用同一套 Python、PyTorch、torch_npu 和 CANN 环境，并执行一次严格的干净构建：
+
+```bash
+./build.sh --multicore on --strict on --clean
+source /usr/local/Ascend/cann/set_env.sh
+source build/native/payload/hyper_parallel/core/multicore/lib/set_env.bash
+```
+
+如果日志出现 `undefined symbol`，或加载了与当前 Python ABI 不同的 `.so`（例如 cp311 环境加载 cp313 产物），应清理旧构建并
+在当前训练环境重新编译；不要通过关闭 MegaMoE 或修改模型结构绕过。完整环境要求见[安装指南](../installation.md)。
+
+### DeepSeek recipe 报 planner boundary 不存在
+
+带 `params`、`in_src`、`in_dst`、`out_src` 或 `out_dst` 的契约必须匹配模块边界，例如
+`model.layers.*.engram`；只有 method replacement 才匹配 `model.layers.*.engram.forward`。如果把参数契约写到
+`.forward`，planner 会提示真实模块没有对应 boundary。建议从仓库内置 recipe 复制后修改，并保留这两类规则的层级区别。

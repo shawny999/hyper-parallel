@@ -22,7 +22,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
-from typing import Optional
+from typing import Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,10 @@ def _monitor_sidecar(process: subprocess.Popen, config_path: str) -> None:
     )
 
 
-def start_codegen_sidecar(config_path: str | Path) -> Optional[subprocess.Popen]:
+def start_codegen_sidecar(
+    config_path: str | Path,
+    overrides: Sequence[str] = (),
+) -> Optional[subprocess.Popen]:
     """Start device-free bundle generation on global rank 0.
 
     The child receives a copy of the parent environment with torchrun identity
@@ -73,6 +76,7 @@ def start_codegen_sidecar(config_path: str | Path) -> Optional[subprocess.Popen]
 
     Args:
         config_path: Training YAML used by the native Trainer.
+        overrides: Trainer CLI overrides forwarded unchanged to generation.
 
     Returns:
         The rank-0 Codegen child process, or ``None`` on nonzero ranks and when
@@ -90,6 +94,7 @@ def start_codegen_sidecar(config_path: str | Path) -> Optional[subprocess.Popen]
         "generate",
         "--config",
         resolved_config,
+        *overrides,
     ]
     try:
         process = subprocess.Popen(  # pylint: disable=consider-using-with
@@ -116,4 +121,32 @@ def start_codegen_sidecar(config_path: str | Path) -> Optional[subprocess.Popen]
     return process
 
 
-__all__ = ["start_codegen_sidecar"]
+def launch_training_with_codegen(
+    config_path: str | Path,
+    overrides: Sequence[str] = (),
+    *,
+    trainer_entry: str | Path = "scripts/train_lm.py",
+) -> None:
+    """Start optional generation and replace this process with native training.
+
+    This codegen-owned launcher preserves the complete Trainer argument list.
+    Native training remains the final process and does not import or call the
+    sidecar integration itself.
+
+    Args:
+        config_path: Training YAML forwarded to both generation and Trainer.
+        overrides: Trainer CLI overrides forwarded unchanged to both processes.
+        trainer_entry: Native training script to execute.
+    """
+    resolved_config = str(Path(config_path).resolve())
+    resolved_entry = str(Path(trainer_entry).resolve())
+    if not Path(resolved_entry).is_file():
+        raise FileNotFoundError(f"native Trainer entry does not exist: {resolved_entry}")
+    start_codegen_sidecar(resolved_config, overrides)
+    os.execv(
+        sys.executable,
+        [sys.executable, resolved_entry, resolved_config, *overrides],
+    )
+
+
+__all__ = ["launch_training_with_codegen", "start_codegen_sidecar"]

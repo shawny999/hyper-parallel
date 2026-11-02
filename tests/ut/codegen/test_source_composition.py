@@ -19,6 +19,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from hyper_parallel.codegen.emit.modeling import rewrite_relative_imports
 from hyper_parallel.codegen.source.composition import compose_nested_model_sources
 from hyper_parallel.codegen.plan.freeze import freeze_plan
 
@@ -91,6 +92,42 @@ class TestSourceComposition(unittest.TestCase):
 
         self.assertEqual(rendered, _PRIMARY_SOURCE)
         mock_read.assert_not_called()
+
+    @patch(
+        "hyper_parallel.codegen.source.composition._read_module_source",
+        return_value=_NESTED_SOURCE,
+    )
+    def test_dynamic_revision_package_uses_parseable_imports(self, _mock_read):
+        """HF revision hashes that begin with digits remain valid generated syntax."""
+        meta = SimpleNamespace(nested_components=[{
+            "fqn": "model.language_model",
+            "type": (
+                "transformers_modules.kimi.7dc8cececbd11535.modeling_linear:"
+                "DeepseekV3Model"
+            ),
+            "owner_module": "transformers_modules.kimi.7dc8cececbd11535.modeling_linear",
+        }])
+
+        rendered = compose_nested_model_sources(_PRIMARY_SOURCE, meta)
+
+        ast.parse(rendered)
+        self.assertIn("__import__('transformers_modules.kimi.7dc8cececbd11535", rendered)
+        self.assertNotIn("\nfrom transformers_modules.kimi.7dc8cececbd11535", rendered)
+
+    def test_primary_dynamic_revision_import_is_rewritten_without_invalid_syntax(self):
+        """Primary trusted source also handles numeric HF revision components."""
+        source = (
+            "from .configuration_kimi import KimiConfig\n"
+            "from .layers import First as Alias, Second\n"
+        )
+        module_name = "transformers_modules.kimi.7dc8cececbd11535.modeling_kimi"
+
+        rendered = rewrite_relative_imports(source, module_name)
+
+        ast.parse(rendered)
+        self.assertIn("__import__('transformers_modules.kimi.7dc8cececbd11535", rendered)
+        self.assertIn("Alias =", rendered)
+        self.assertNotIn("\nfrom transformers_modules.kimi.7dc8cececbd11535", rendered)
 
     def test_freeze_records_nested_owner_and_full_boundary_type(self):
         """The snapshot preserves enough identity to find external source."""

@@ -1,7 +1,7 @@
 # codegen combination-test case: qwen2_moe tp=1 cp=1 ep=8 pp=1
 model:
   _target_: hyper_parallel.models.HyperAutoModelForCausalLM.from_pretrained
-  pretrained_model_name_or_path: /home/lxy/probe_ckpts/qwen2_moe
+  pretrained_model_name_or_path: path/to/qwen2_moe
   torch_dtype: bfloat16
   attn_implementation: eager
   force_hf: false

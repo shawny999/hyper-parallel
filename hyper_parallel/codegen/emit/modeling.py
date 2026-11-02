@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import ast
 import io
+import keyword
 import os
 import tokenize
 from typing import Any
@@ -93,6 +94,7 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
     unless_anchor = _relative_anchor(module_name)
     if unless_anchor is None:
         return text
+    text = _rewrite_dynamic_relative_imports(text, unless_anchor)
 
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
@@ -166,6 +168,40 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
     if not edits:
         return text
     return _splice(text, edits)
+
+
+def _rewrite_dynamic_relative_imports(text: str, anchor: list[str]) -> str:
+    """Rewrite imports whose resolved package is not valid Python syntax."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return text
+    edits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.level == 0:
+            continue
+        absolute = _absolute_spec(anchor, node.level, (node.module or "").split("."))
+        if absolute is None or _is_import_syntax_safe(absolute):
+            continue
+        assignments = []
+        for alias in node.names:
+            if alias.name == "*":
+                raise ValueError(
+                    f"codegen cannot rewrite a wildcard import from dynamic module {absolute!r}"
+                )
+            target = alias.asname or alias.name
+            assignments.append(
+                f"{target} = __import__({absolute!r}, fromlist=[{alias.name!r}]).{alias.name}"
+            )
+        indent = " " * node.col_offset
+        replacement = ("\n" + indent).join(assignments)
+        edits.append(((node.lineno, node.col_offset), (node.end_lineno, node.end_col_offset), replacement))
+    return _splice(text, edits) if edits else text
+
+
+def _is_import_syntax_safe(module: str) -> bool:
+    """Return whether every dotted component can appear in an import statement."""
+    return all(part.isidentifier() and not keyword.iskeyword(part) for part in module.split("."))
 
 
 def _relative_anchor(module_name: str) -> list[str] | None:

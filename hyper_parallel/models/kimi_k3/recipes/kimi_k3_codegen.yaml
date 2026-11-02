@@ -1,6 +1,6 @@
 model:
   _target_: hyper_parallel.models.HyperAutoModelForCausalLM.from_pretrained
-  pretrained_model_name_or_path: /home/lxy/codegen_reval/stage10_all_models_offline/assets/kimi_k3
+  pretrained_model_name_or_path: path/to/kimi_k3
   load_base_model: false
   torch_dtype: bfloat16
   attn_implementation: eager

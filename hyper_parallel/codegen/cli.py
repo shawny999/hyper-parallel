@@ -27,6 +27,7 @@ from hyper_parallel.codegen.check.drift import verify_drift_intact
 from hyper_parallel.codegen.check.pin import verify_transformers_pin
 from hyper_parallel.codegen.manager import preflight_integrity_check, resolve_layout_for_config
 from hyper_parallel.codegen.meta import load_codegen_meta
+from hyper_parallel.codegen.train_sidecar import launch_training_with_codegen
 from hyper_parallel.trainer.config import parser as config_parser
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,16 @@ def cmd_check_pin(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_train(args: argparse.Namespace) -> int:
+    """Launch native training with rank-zero best-effort generation."""
+    launch_training_with_codegen(
+        args.config,
+        _cli_overrides(args),
+        trainer_entry=args.entry,
+    )
+    return 0
+
+
 def discover_yaml_files(root: str) -> Iterator[str]:
     """Yield YAML files below root while skipping generated and environment directories."""
     if not os.path.isdir(root):
@@ -152,6 +163,18 @@ def _build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--output", help="explicit artifact output directory")
     generate.set_defaults(func=cmd_generate)
 
+    train = subparsers.add_parser(
+        "train",
+        help="run native training and generate a bundle on global rank zero",
+    )
+    train.add_argument("--config", required=True, help="path to the training YAML")
+    train.add_argument(
+        "--entry",
+        default="scripts/train_lm.py",
+        help="native training script (default: scripts/train_lm.py)",
+    )
+    train.set_defaults(func=cmd_train)
+
     check = subparsers.add_parser("check", help="preflight integrity check")
     check.add_argument("--config", help="path to the training YAML")
     check.add_argument("--all", action="store_true", help="check every discovered YAML")
@@ -179,6 +202,7 @@ __all__ = [
     "cmd_check_all",
     "cmd_check_pin",
     "cmd_generate",
+    "cmd_train",
     "discover_yaml_files",
     "main",
 ]

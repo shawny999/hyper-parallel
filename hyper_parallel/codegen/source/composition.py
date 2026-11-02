@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import keyword
 import os
 import re
 from typing import Any
@@ -152,16 +153,45 @@ class _AbsoluteImports(ast.NodeTransformer):
         """Create a transformer for one installed source package."""
         self._package = package
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:  # pylint: disable=invalid-name
+    def visit_ImportFrom(  # pylint: disable=invalid-name
+        self,
+        node: ast.ImportFrom,
+    ) -> ast.AST | list[ast.AST]:
         """Convert one relative import into its installed absolute module."""
         if node.level == 0:
             return node
         relative = "." * node.level + (node.module or "")
         module = importlib.util.resolve_name(relative, self._package)
+        if not all(part.isidentifier() and not keyword.iskeyword(part) for part in module.split(".")):
+            return self._dynamic_imports(node, module)
         return ast.copy_location(
             ast.ImportFrom(module=module, names=node.names, level=0),
             node,
         )
+
+    @staticmethod
+    def _dynamic_imports(node: ast.ImportFrom, module: str) -> list[ast.AST]:
+        """Render imports whose dynamic package contains non-Python identifiers."""
+        assignments = []
+        for alias in node.names:
+            if alias.name == "*":
+                raise ValueError(
+                    f"codegen cannot compose a wildcard import from dynamic module {module!r}"
+                )
+            imported = ast.Call(
+                func=ast.Name(id="__import__", ctx=ast.Load()),
+                args=[ast.Constant(module)],
+                keywords=[ast.keyword(arg="fromlist", value=ast.List(
+                    elts=[ast.Constant(alias.name)],
+                    ctx=ast.Load(),
+                ))],
+            )
+            assignment = ast.Assign(
+                targets=[ast.Name(id=alias.asname or alias.name, ctx=ast.Store())],
+                value=ast.Attribute(value=imported, attr=alias.name, ctx=ast.Load()),
+            )
+            assignments.append(ast.copy_location(assignment, node))
+        return assignments
 
 
 def _replace_auto_model_construction(

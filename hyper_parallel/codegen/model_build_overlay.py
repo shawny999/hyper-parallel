@@ -26,6 +26,7 @@ import torch
 from hyper_parallel.codegen.hash import file_line_count, sha256_file
 from hyper_parallel.codegen.manager import ensure_codegen_artifact_from_snapshot
 from hyper_parallel.codegen.session import CodegenBuildSession
+from hyper_parallel.codegen.source.compat import install_output_recorder_compat
 from hyper_parallel.components.checkpoint.weight_conversion import get_model_conversion_mapping
 from hyper_parallel.core.dtensor.init_weights import init_empty_weights
 from hyper_parallel.models._transformers import auto_model, model_builder
@@ -207,6 +208,7 @@ def _codegen_build_model(session: CodegenBuildSession, artifact_dir: Optional[st
         )
         if "trust_remote_code" in kwargs:
             init_kwargs["trust_remote_code"] = kwargs["trust_remote_code"]
+        install_output_recorder_compat()
         with _codegen_model_init_context():
             _, model = auto_model._init_model(  # pylint: disable=protected-access
                 cls,

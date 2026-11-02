@@ -506,6 +506,8 @@ def preflight_integrity_check(
         raise FileNotFoundError(
             f"codegen preflight: missing meta at {layout.meta_path}; run generate first"
         )
+    if meta.model_name:
+        layout = ArtifactLayout.build_default(layout.artifact_dir, meta.model_name)
     verify_meta_required_fields(meta)
     verify_snapshot_contract(meta)
     if meta.snapshot_schema_version is None:

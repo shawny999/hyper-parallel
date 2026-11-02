@@ -24,6 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from hyper_parallel.codegen import manager
 from hyper_parallel.codegen.artifact import (
@@ -45,6 +46,8 @@ from hyper_parallel.codegen.plan.freeze import (
 )
 from hyper_parallel.codegen.source.resolver import resolve_remote_siblings
 from hyper_parallel.trainer.config import parser as config_parser
+from hyper_parallel.trainer.config.parallelism import PlanOverride, entries_to_plan_overrides
+from hyper_parallel.trainer.config.resolver import resolve_component
 
 
 def test_dynamic_module_source_resolves_remote_siblings(tmp_path: Path) -> None:
@@ -195,6 +198,46 @@ def test_training_args_only_parse_config(
     monkeypatch.setattr(config_parser, "_load_training_config", lambda *_args: config)
 
     assert config_parser.parse_training_args([str(yaml_path)]) is config
+
+
+def test_deepseek_v41_engram_params_target_planner_boundary() -> None:
+    """Shipped recipes keep Engram params on the module boundary."""
+    repo_root = Path(manager.__file__).resolve().parents[2]
+    model_recipe = (
+        repo_root
+        / "hyper_parallel"
+        / "models"
+        / "deepseek_v41"
+        / "recipes"
+        / "deepseek_v41_codegen.yaml"
+    )
+    demo_recipes = (repo_root / "examples" / "training_demo" / "deepseek_v41").glob("*.yaml")
+    checked_demo_recipes = []
+
+    for recipe_path in (model_recipe, *demo_recipes):
+        raw_entries = yaml.safe_load(recipe_path.read_text(encoding="utf-8")).get("plan_overrides", ())
+        if not any("engram" in entry["match"] for entry in raw_entries):
+            continue
+        if recipe_path != model_recipe:
+            checked_demo_recipes.append(recipe_path)
+        params_entry = next(
+            entry for entry in raw_entries if "params" in entry and "engram" in entry["match"]
+        )
+        method_entry = next(
+            entry
+            for entry in raw_entries
+            if entry.get("replace", {}).get("kind") == "method" and "engram" in entry["match"]
+        )
+
+        resolved = resolve_component(params_entry, annotation=PlanOverride, path="$.plan_overrides")
+        overrides = entries_to_plan_overrides([resolved], ep_size=8)
+
+        assert params_entry["match"] == "model.layers.*.engram", recipe_path
+        assert set(overrides) == {"model.layers.*.engram"}, recipe_path
+        assert overrides["model.layers.*.engram"].params is not None, recipe_path
+        assert method_entry["match"] == "model.layers.*.engram.forward", recipe_path
+
+    assert checked_demo_recipes
 
 
 def test_codegen_layout_prefers_model_anchored_bundle_for_known_families(

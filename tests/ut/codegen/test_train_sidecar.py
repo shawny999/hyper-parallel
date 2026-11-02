@@ -56,16 +56,23 @@ class TestTrainSidecar(unittest.TestCase):
         }
 
         with patch.dict(os.environ, distributed_env, clear=True):
-            process = train_sidecar.start_codegen_sidecar(config_path)
+            process = train_sidecar.start_codegen_sidecar(
+                config_path,
+                ["--model.config_path=assets/model"],
+            )
             parent_after_start = dict(os.environ)
 
         self.assertIs(process, child)
         self.assertEqual(parent_after_start, distributed_env)
         command = popen.call_args.args[0]
         child_env = popen.call_args.kwargs["env"]
-        self.assertEqual(command[:4], [sys.executable, "-m", "hyper_parallel.codegen", "--verbose"])
-        self.assertEqual(command[-2], "--config")
-        self.assertEqual(command[-1], str(config_path.resolve()))
+        self.assertEqual(
+            command[:4],
+            [sys.executable, "-m", "hyper_parallel.codegen", "--verbose"],
+        )
+        self.assertEqual(command[-3], "--config")
+        self.assertEqual(command[-2], str(config_path.resolve()))
+        self.assertEqual(command[-1], "--model.config_path=assets/model")
         self.assertEqual(child_env["HP_TEST_VALUE"], "kept")
         for name in train_sidecar._DISTRIBUTED_ENV_NAMES:  # pylint: disable=protected-access
             self.assertNotIn(name, child_env)
@@ -93,6 +100,30 @@ class TestTrainSidecar(unittest.TestCase):
 
         self.assertIn("exit code 7", captured.output[0])
         self.assertIn("native training continues", captured.output[0])
+
+    @patch.object(train_sidecar.os, "execv")
+    @patch.object(train_sidecar, "start_codegen_sidecar")
+    def test_launcher_forwards_identical_arguments_before_native_exec(
+        self,
+        start_sidecar: MagicMock,
+        execv: MagicMock,
+    ) -> None:
+        """The codegen-owned launcher preserves Trainer CLI overrides."""
+        overrides = ["--model.config_path=assets/model", "--training.train_iters=10"]
+        with patch.object(Path, "is_file", return_value=True):
+            train_sidecar.launch_training_with_codegen(
+                "recipes/train.yaml",
+                overrides,
+                trainer_entry="scripts/train_lm.py",
+            )
+
+        resolved_config = str(Path("recipes/train.yaml").resolve())
+        resolved_entry = str(Path("scripts/train_lm.py").resolve())
+        start_sidecar.assert_called_once_with(resolved_config, overrides)
+        execv.assert_called_once_with(
+            sys.executable,
+            [sys.executable, resolved_entry, resolved_config, *overrides],
+        )
 
 
 if __name__ == "__main__":

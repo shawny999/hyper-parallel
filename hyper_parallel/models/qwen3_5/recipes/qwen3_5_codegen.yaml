@@ -1,7 +1,7 @@
 # codegen combination-test case: qwen3_5_text tp=2 cp=4 ep=1 pp=1
 model:
   _target_: hyper_parallel.models.HyperAutoModelForCausalLM.from_pretrained
-  pretrained_model_name_or_path: /home/lxy/codegen_reval/stage10_all_models_offline/assets/qwen3_5_text
+  pretrained_model_name_or_path: path/to/qwen3_5
   torch_dtype: bfloat16
   attn_implementation: eager
   force_hf: false

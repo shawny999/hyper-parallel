@@ -149,6 +149,38 @@ def test_python_replacement_rule_gets_stable_order_fallback():
     assert records["applications"][0]["rule_id"] == "python-replacement-0000"
 
 
+def test_inferred_source_type_is_recorded_from_native_application():
+    """A declaration without source_type uses the actually matched module type."""
+    model = nn.Module()
+    model.block = _SourceBlock()
+    spec = ModuleReplacementSpec(
+        match=("block",),
+        factory=_replace_source_block,
+        module_type=None,
+        replacement_target="tests.replace_source_block",
+    )
+    session = CodegenBuildSession()
+    session.record_source({"model_type": "toy"})
+
+    plan = compile_module_replacements(model, (spec,))
+    apply_module_replacements(
+        model,
+        plan,
+        observation_callback=session.record_replacements,
+    )
+    session.mark_not_required("replacement_only_test")
+    snapshot = session.finish()
+
+    replacements = snapshot.to_dict()["replacements"]
+    assert replacements["declarations"][0]["source_type"] is None
+    assert replacements["applications"][0]["source_type"] == (
+        f"{_SourceBlock.__module__}:{_SourceBlock.__qualname__}"
+    )
+    assert replacement_records_from_snapshot(snapshot)[0]["module_type"] == (
+        f"{_SourceBlock.__module__}.{_SourceBlock.__qualname__}"
+    )
+
+
 def test_yaml_replacement_preserves_declaration_order_and_static_arguments():
     target = Target(
         _replace_source_block,

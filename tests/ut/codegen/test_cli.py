@@ -75,6 +75,36 @@ def test_generate_rejects_torchrun_environment(monkeypatch):
     assert result == 1
 
 
+def test_train_forwards_full_override_list_to_codegen_launcher(monkeypatch):
+    """The opt-in training command keeps native and generation arguments equal."""
+    captured = {}
+
+    def _launch(config, overrides, *, trainer_entry):
+        captured.update(config=config, overrides=list(overrides), trainer_entry=trainer_entry)
+
+    monkeypatch.setattr(cli, "launch_training_with_codegen", _launch)
+
+    result = cli.main([
+        "train",
+        "--config",
+        "train.yaml",
+        "--entry",
+        "custom_train.py",
+        "--model.config_path=assets/model",
+        "--training.train_iters=10",
+    ])
+
+    assert result == 0
+    assert captured == {
+        "config": "train.yaml",
+        "overrides": [
+            "--model.config_path=assets/model",
+            "--training.train_iters=10",
+        ],
+        "trainer_entry": "custom_train.py",
+    }
+
+
 def test_verbose_cli_logs_traceback(monkeypatch):
     """Verbose failures retain their traceback for remote generation diagnosis."""
     captured = {}

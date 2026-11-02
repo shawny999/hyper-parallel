@@ -166,6 +166,59 @@ def test_snapshot_manager_uses_no_legacy_derivation(monkeypatch, tmp_path):
     assert captured["meta"].parallel_dims["tp_size"] == 2
 
 
+def test_preflight_uses_model_name_recorded_by_generated_bundle(monkeypatch, tmp_path):
+    """Explicit output checks use emitted identity instead of config aliases."""
+    artifact_dir = tmp_path / "generated"
+    artifact_dir.mkdir()
+    (artifact_dir / "codegen_meta.json").write_text("{}", encoding="utf-8")
+    meta = type("Meta", (), {
+        "model_name": "Deepseek_V4",
+        "snapshot_schema_version": 1,
+        "snapshot_status": "generated",
+        "signature": "abc123abc123",
+    })()
+    captured = {}
+
+    monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: meta)
+    monkeypatch.setattr(manager, "validate_snapshot_signature", lambda _signature: None)
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_meta_required_fields",
+        lambda _meta: None,
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_snapshot_contract",
+        lambda _meta: None,
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_output_hashes",
+        lambda _meta, layout: captured.update(layout=layout),
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_generated_source",
+        lambda _layout: None,
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_boundary_forms",
+        lambda _meta, _layout: None,
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.verify_param_plan",
+        lambda _meta, model: None,
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.check.preflight.warn_skipped_overrides",
+        lambda _meta: None,
+    )
+
+    manager.preflight_integrity_check(
+        object(),
+        artifact_dir=str(artifact_dir),
+        hf_config=object(),
+    )
+
+    assert captured["layout"].modeling_path.endswith("modeling_Deepseek_V4_gen_npu.py")
+
+
 def test_snapshot_manager_reuses_matching_signature(monkeypatch, tmp_path):
     source = tmp_path / "modeling_toy.py"
     source.write_text("class ToyModel:\n    pass\n", encoding="utf-8")

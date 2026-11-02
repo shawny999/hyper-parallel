@@ -1,6 +1,6 @@
 model:
   _target_: hyper_parallel.models.HyperAutoModelForCausalLM.from_pretrained
-  pretrained_model_name_or_path: /home/lxy/probe_ckpts/deepseek_v3
+  pretrained_model_name_or_path: path/to/deepseek_v3
   torch_dtype: bfloat16
   attn_implementation: eager
   force_hf: false

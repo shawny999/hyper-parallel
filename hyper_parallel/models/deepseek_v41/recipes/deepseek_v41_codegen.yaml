@@ -1,7 +1,7 @@
 model:
   _target_: hyper_parallel.models.deepseek_v41.adapter.validation.cropped_model.build_cropped_deepseek_v41
-  config_path: /home/lxy/DeepSeek-V4.1-Flash
-  engram_assets_path: /home/lxy/codegen_reval/val/data/engram_depth_preserving_d8.json
+  config_path: path/to/deepseek_v41
+  engram_assets_path: path/to/engram_depth_preserving_d8.json
   text_parameter_divisor: 8
   num_routed_experts: 16
   exercise_post_training_indexer: true
@@ -98,7 +98,7 @@ plan_overrides:
       pre: {tp: replicate, cp: "shard(1)", ep: replicate}
       post: {tp: replicate, cp: "shard(1)", ep: replicate}
       residual: {tp: replicate, cp: "shard(1)", ep: replicate}
-  - match: "model.layers.*.engram.forward"
+  - match: "model.layers.*.engram"
     params:
       q_weight: {tp: replicate}
       k_weight: {tp: replicate}
