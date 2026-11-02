@@ -386,6 +386,7 @@ def build_deepseek_v41_validation_config(
         vision_parameter_divisor: int = 4,
         num_routed_experts: int = 16,
         exercise_post_training_indexer: bool = True,
+        enable_candidate_pool: bool = False,
         indexer_loss_coeff: float = 1.0e-3,
         router_aux_loss_coeff: float = 1.0e-4,
         router_bias_update_rate: float = 1.0e-3,
@@ -413,6 +414,10 @@ def build_deepseek_v41_validation_config(
         num_routed_experts: Routed-expert count for the crop; routing top-k and every MoE layer are retained.
         exercise_post_training_indexer: Bound the candidate pool so a 4K smoke
             exercises candidate selection before the released Reindex layers.
+            Only applies when ``enable_candidate_pool`` is true.
+        enable_candidate_pool: Retain hierarchical candidates when true. The
+            default preserves released layer roles without candidate-specific
+            crop remapping.
         indexer_loss_coeff: Sparse-stage Indexer KL coefficient.
         router_aux_loss_coeff: Sequence balancing coefficient; zero disables it.
         router_bias_update_rate: Per-step text/image correction-bias update speed; zero disables it.
@@ -427,6 +432,8 @@ def build_deepseek_v41_validation_config(
     Raises:
         ValueError: If the source, parameter crop, or assets are inconsistent.
     """
+    if not isinstance(enable_candidate_pool, bool):
+        raise ValueError(f"enable_candidate_pool must be a bool, got {enable_candidate_pool!r}")
     source, text, assets, assets_path, released_hidden_layers = _load_validation_sources(
         config_path, engram_assets_path
     )
@@ -443,9 +450,12 @@ def build_deepseek_v41_validation_config(
         assets,
         assets_path,
         resolved_hidden_layers,
-        exercise_post_training_indexer,
+        exercise_post_training_indexer and enable_candidate_pool,
         indexer_loss_coeff,
     )
+    if not enable_candidate_pool:
+        config.v41_candidate_source_layer_id = -1
+        config.v41_candidate_topk_blocks = 0
     config.router_aux_loss_coef = float(router_aux_loss_coeff)
     config.router_bias_update_rate = float(router_bias_update_rate)
     _apply_v41_vision_fields(
@@ -508,7 +518,7 @@ def build_cropped_deepseek_v41(
         activation_swap: str = "none",
         model_init_dtype: str = "float32",
         load_base_model: bool = False,
-        enable_candidate_pool: bool = True,
+        enable_candidate_pool: bool = False,
         verify_hf_weights: str | None = None,
 ) -> PreTrainedModel:
     """Build and parallelize a configurable V4.1 validation crop.
@@ -516,8 +526,11 @@ def build_cropped_deepseek_v41(
         config_path: Local DeepSeek-V4.1 repository.
         engram_assets_path: Prepared scaled-Engram JSON file.
         num_routed_experts: Routed-expert count for the parameter crop.
-        exercise_post_training_indexer: Exercise the Full/Reindex hierarchy at
-            native layer indices.
+        exercise_post_training_indexer: Bound candidates and remap shallow
+            crops for Reindex testing. Only applies when
+            ``enable_candidate_pool`` is true.
+        enable_candidate_pool: Enable hierarchical candidates. The default
+            preserves retained released layer roles.
         indexer_loss_coeff: Sparse-stage Indexer KL coefficient.
         router_aux_loss_coeff: Sequence balancing coefficient; zero disables it.
         router_bias_update_rate: Per-step text/image correction-bias update speed; zero disables it.
