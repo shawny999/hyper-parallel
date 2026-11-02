@@ -14,15 +14,22 @@
 # ============================================================================
 """Contracts for recording native module replacement decisions."""
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch import nn
 
 from hyper_parallel.codegen.emit.replacement import replacement_records_from_snapshot
+from hyper_parallel.codegen.inline.framework_spec import replacement_spec_for
+from hyper_parallel.codegen.model_build_overlay import (
+    _observe_replacement_installations,
+    _observe_replacements,
+)
 from hyper_parallel.codegen.session import CodegenBuildSession
+from hyper_parallel.models import replacement as replacement_api
 from hyper_parallel.models.replacement import (
     ModuleReplacementSpec,
-    _apply_module_replacement_actions,
     apply_module_replacements,
     compile_module_replacements,
     module_replacement,
@@ -59,6 +66,15 @@ class _ReplacementBlock(nn.Module):
 
 
 @module_replacement
+class _ObservedReplacementBlock(_ReplacementBlock):
+    """Model-owned replacement with required native executor arguments."""
+
+    def __init__(self, *, module, module_fqn, context):
+        del module_fqn, context
+        super().__init__(module)
+
+
+@module_replacement
 def _replace_source_block(*, module, module_fqn, context):
     del module_fqn, context
     return _ReplacementBlock(module)
@@ -89,11 +105,11 @@ def test_native_replacement_records_declaration_and_application_once():
     session.record_source({"model_type": "toy"})
 
     plan = compile_module_replacements(model, (spec,))
-    apply_module_replacements(
-        model,
-        plan,
-        context={"ep": True},
-        observation_callback=session.record_replacements,
+    with _observe_replacement_installations(model, plan.specs) as applications:
+        apply_module_replacements(model, plan, context={"ep": True})
+    session.record_replacements(
+        declarations=replacement_api.describe_replacement_declarations(plan.specs),
+        applications=applications,
     )
     session.mark_not_required("replacement_only_test")
     snapshot = session.finish().to_dict()
@@ -118,11 +134,12 @@ def test_native_replacement_records_declaration_and_application_once():
     assert application["weight_transforms"] == []
     assert replacement_records_from_snapshot(session.finish()) == ({
         "exact_type": True,
-        "factory": "tests.replace_block",
+        "factory": f"{_ReplacementBlock.__module__}.{_ReplacementBlock.__qualname__}",
         "fqn": "alias",
         "fqns": ["alias", "primary"],
         "match": ["primary"],
         "module_type": f"{_SourceBlock.__module__}.{_SourceBlock.__qualname__}",
+        "replacement_target": "tests.replace_block",
         "target_config": {"mode": "pipelined"},
     },)
 
@@ -136,17 +153,15 @@ def test_python_replacement_rule_gets_stable_order_fallback():
     model = nn.Module()
     model.block = _SourceBlock()
     spec = ModuleReplacementSpec(("block",), replace_block, _SourceBlock, True)
-    records = {}
+    applications = []
 
     plan = compile_module_replacements(model, (spec,))
-    apply_module_replacements(
-        model,
-        plan,
-        observation_callback=lambda **values: records.update(values),
-    )
+    with _observe_replacement_installations(model, plan.specs) as applications:
+        apply_module_replacements(model, plan)
 
-    assert records["declarations"][0]["rule_id"] == "python-replacement-0000"
-    assert records["applications"][0]["rule_id"] == "python-replacement-0000"
+    declarations = replacement_api.describe_replacement_declarations(plan.specs)
+    assert declarations[0]["rule_id"] == "python-replacement-0000"
+    assert applications[0]["rule_id"] == "python-replacement-0000"
 
 
 def test_inferred_source_type_is_recorded_from_native_application():
@@ -163,10 +178,11 @@ def test_inferred_source_type_is_recorded_from_native_application():
     session.record_source({"model_type": "toy"})
 
     plan = compile_module_replacements(model, (spec,))
-    apply_module_replacements(
-        model,
-        plan,
-        observation_callback=session.record_replacements,
+    with _observe_replacement_installations(model, plan.specs) as applications:
+        apply_module_replacements(model, plan)
+    session.record_replacements(
+        declarations=replacement_api.describe_replacement_declarations(plan.specs),
+        applications=applications,
     )
     session.mark_not_required("replacement_only_test")
     snapshot = session.finish()
@@ -218,10 +234,12 @@ def test_unmatched_rule_is_recorded_before_native_error_is_raised():
     session.record_source({"model_type": "toy"})
 
     with pytest.raises(ValueError, match="matched no final module"):
-        _apply_module_replacement_actions(
+        _observe_replacements(
             nn.Module(),
-            (spec,),
-            observation_callback=session.record_replacements,
+            SimpleNamespace(module_replacements=(spec,), mesh_context=None),
+            None,
+            False,
+            session,
         )
 
     session.mark_not_required("expected_native_error_probe")
@@ -231,3 +249,30 @@ def test_unmatched_rule_is_recorded_before_native_error_is_raised():
         "reason": "matched_no_final_module",
         "rule_id": "missing-rule",
     }]
+
+
+def test_replacement_observer_restores_native_installer_after_error():
+    original = replacement_api._install_replacement_target
+
+    with pytest.raises(RuntimeError, match="probe"):
+        with _observe_replacement_installations(nn.Module(), ()):
+            assert replacement_api._install_replacement_target is not original
+            raise RuntimeError("probe")
+
+    assert replacement_api._install_replacement_target is original
+
+
+def test_observed_replacement_class_needs_no_codegen_declaration():
+    replacement_type = (
+        f"{_ObservedReplacementBlock.__module__}."
+        f"{_ObservedReplacementBlock.__qualname__}"
+    )
+    source_type = f"{_SourceBlock.__module__}.{_SourceBlock.__qualname__}"
+
+    spec = replacement_spec_for(replacement_type, module_type=source_type)
+
+    assert spec is not None
+    assert spec.old_ctor == "_SourceBlock"
+    assert spec.new_ctor == "_ObservedReplacementBlock"
+    assert spec.mode == "wrap_source"
+    assert spec.keyword_args == ("module_fqn=''", "context={}")

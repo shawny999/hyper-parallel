@@ -30,7 +30,7 @@ from hyper_parallel.codegen.source.compat import install_output_recorder_compat
 from hyper_parallel.components.checkpoint.weight_conversion import get_model_conversion_mapping
 from hyper_parallel.core.dtensor.init_weights import init_empty_weights
 from hyper_parallel.models._transformers import auto_model, model_builder
-from hyper_parallel.models.replacement import _apply_module_replacement_actions
+from hyper_parallel.models import replacement as replacement_api
 
 
 @dataclass
@@ -89,18 +89,77 @@ def _observe_replacements(
 ) -> Any:
     """Apply native replacement declarations while recording their result."""
     weights_mapping = get_model_conversion_mapping(model)
-    model, _ = _apply_module_replacement_actions(
-        model,
-        getattr(distributed_setup, "module_replacements", None),
-        weights_mapping=weights_mapping,
-        context=model_builder._build_replacement_context(  # pylint: disable=protected-access
-            distributed_setup,
-            low_precision_config,
-        ),
-        capture_checkpoint_metadata=load_base_model,
-        observation_callback=session.record_replacements,
+    specs = tuple(getattr(distributed_setup, "module_replacements", None) or ())
+    try:
+        with _observe_replacement_installations(model, specs) as applications:
+            model, _ = replacement_api._apply_module_replacement_actions(  # pylint: disable=protected-access
+                model,
+                specs,
+                weights_mapping=weights_mapping,
+                context=model_builder._build_replacement_context(  # pylint: disable=protected-access
+                    distributed_setup,
+                    low_precision_config,
+                ),
+                capture_checkpoint_metadata=load_base_model,
+            )
+    except replacement_api.ModuleReplacementMatchError as exc:
+        session.record_replacements(
+            declarations=replacement_api.describe_replacement_declarations(specs),
+            applications=(),
+            unmatched=exc.unmatched,
+        )
+        raise
+    session.record_replacements(
+        declarations=replacement_api.describe_replacement_declarations(specs),
+        applications=applications,
+        unmatched=(),
     )
     return model
+
+
+@contextmanager
+def _observe_replacement_installations(
+    model: Any,
+    specs: tuple[Any, ...],
+) -> Iterator[list[dict[str, Any]]]:
+    """Observe native replacement installation without changing its API."""
+    applications: list[dict[str, Any]] = []
+    spec_indexes = {id(spec): index for index, spec in enumerate(specs)}
+    original_install = replacement_api._install_replacement_target  # pylint: disable=protected-access
+
+    def _observe_install(*args: Any, **kwargs: Any) -> None:
+        """Record the source and result of the one native installation call."""
+        target = args[1]
+        transforms = args[3]
+        transform_count = len(transforms)
+        source_type = _symbol_path(type(target.source))
+        original_install(*args, **kwargs)
+        replacement = model.get_submodule(target.module_fqns[0])
+        applications.append({
+            "rule_id": replacement_api._replacement_rule_id(  # pylint: disable=protected-access
+                target.spec,
+                spec_indexes.get(id(target.spec), 0),
+            ),
+            "module_fqns": list(target.module_fqns),
+            "primary_fqn": target.module_fqns[0],
+            "source_type": source_type,
+            "replacement_type": _symbol_path(type(replacement)),
+            "weight_transforms": [
+                _symbol_path(type(transform))
+                for transform in transforms[transform_count:]
+            ],
+        })
+
+    replacement_api._install_replacement_target = _observe_install  # pylint: disable=protected-access
+    try:
+        yield applications
+    finally:
+        replacement_api._install_replacement_target = original_install  # pylint: disable=protected-access
+
+
+def _symbol_path(symbol: Any) -> str:
+    """Return a stable import path for an observed runtime type."""
+    return f"{symbol.__module__}:{symbol.__qualname__}"
 
 
 def _observe_plan(

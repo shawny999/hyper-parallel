@@ -128,23 +128,13 @@ def _factory_function(target: str, model_type: str | None):
     return getattr(module, name, None)
 
 
-#: YAML ``replace_module`` targets under this prefix name a generic component
-#: class directly (``hyper_parallel.components.modules.engram.EngramModule``)
-#: -- the declaration the native path builds through
-#: ``_target_replacement_factory`` as ``Cls(module=..., module_fqn=...,
-#: context=...)``.
+#: Generic components are valid direct targets without a decorator. Model-owned
+#: classes are accepted only when their native replacement decorator marks them.
 _COMPONENTS_PREFIX = "hyper_parallel.components."
 
 
 def _direct_component_class(target: str) -> type | None:
-    """Import the generic component class a target names directly.
-
-    Fail closed: only a ``hyper_parallel.components.*`` path that resolves to
-    a class yields a component.  Any other target (a family factory path, a
-    user helper, a typo) is not a component declaration and returns ``None``.
-    """
-    if not target.startswith(_COMPONENTS_PREFIX):
-        return None
+    """Import a generic or natively decorated replacement class."""
     module_name, _, attr = target.rpartition(".")
     if not module_name or not attr:
         return None
@@ -153,7 +143,14 @@ def _direct_component_class(target: str) -> type | None:
     except ImportError:
         return None
     component = getattr(module, attr, None)
-    return component if isinstance(component, type) else None
+    if not isinstance(component, type):
+        return None
+    if (
+        target.startswith(_COMPONENTS_PREFIX)
+        or getattr(component, "_hp_module_replacement", False)
+    ):
+        return component
+    return None
 
 
 def _component_replacement_target(component: type) -> ReplacementTarget | None:
@@ -170,8 +167,8 @@ def _component_replacement_target(component: type) -> ReplacementTarget | None:
     if "module" not in parameters:
         return None
     arguments = tuple(
-        ReplacementArgument(name, None)
-        for name in ("module_fqn", "context")
+        ReplacementArgument(name, value)
+        for name, value in (("module_fqn", "''"), ("context", "{}"))
         if name in parameters
     )
     return ReplacementTarget(
@@ -307,8 +304,10 @@ def replacement_spec_for(
     """
     if target is None:
         return None
-    if not adapter_path_parts(target):
+    if _direct_component_class(target) is not None:
         return _component_replacement_spec(target, model_type, module_type=module_type)
+    if not adapter_path_parts(target):
+        return None
     model_type = _family_key(model_type, target)
     factory = _factory_function(target, model_type)
     if factory is None:

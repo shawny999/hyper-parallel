@@ -548,7 +548,6 @@ def _apply_module_replacement_actions(
     weights_mapping: list[WeightRenaming | WeightConverter] | None = None,
     context: Mapping[str, Any] | None = None,
     capture_checkpoint_metadata: bool = True,
-    observation_callback: Optional[Callable[..., None]] = None,
 ) -> tuple[nn.Module, list[WeightRenaming | WeightConverter] | None]:
     """Apply normalized replacement rules before sharding sees the model.
 
@@ -574,23 +573,13 @@ def _apply_module_replacement_actions(
             f"active axes: {active_model_parallel_axes}."
         )
     specs = tuple(replacement_rules or ())
-    try:
-        plan = compile_module_replacements(model, specs)
-    except ModuleReplacementMatchError as exc:
-        if observation_callback is not None:
-            observation_callback(
-                declarations=describe_replacement_declarations(specs),
-                applications=(),
-                unmatched=exc.unmatched,
-            )
-        raise
+    plan = compile_module_replacements(model, specs)
     return apply_module_replacements(
         model,
         plan,
         weights_mapping=weights_mapping,
         context=context,
         capture_checkpoint_metadata=capture_checkpoint_metadata,
-        observation_callback=observation_callback,
     )
 
 
@@ -600,8 +589,7 @@ def _install_replacement_target(
     context: Mapping[str, Any],
     extra_transforms: list[WeightRenaming | WeightConverter],
     weights_mapping: list[WeightRenaming | WeightConverter] | None,
-    rule_id: str,
-) -> dict[str, Any]:
+) -> None:
     """Build, validate, and install one replacement target in place."""
     source = target.source
     replacement = target.spec.factory(
@@ -639,14 +627,6 @@ def _install_replacement_target(
     for fqn in target.module_fqns:
         parent, name = _parent_and_name(model, fqn)
         parent._modules[name] = replacement  # pylint: disable=protected-access
-    return {
-        "rule_id": rule_id,
-        "module_fqns": list(target.module_fqns),
-        "primary_fqn": target.module_fqns[0],
-        "source_type": _symbol_path(type(source)),
-        "replacement_type": _symbol_path(type(replacement)),
-        "weight_transforms": [_symbol_path(type(transform)) for transform in transforms],
-    }
 
 
 def apply_module_replacements(
@@ -656,7 +636,6 @@ def apply_module_replacements(
     weights_mapping: list[WeightRenaming | WeightConverter] | None = None,
     context: Mapping[str, Any] | None = None,
     capture_checkpoint_metadata: bool = True,
-    observation_callback: Optional[Callable[..., None]] = None,
 ) -> tuple[nn.Module, list[WeightRenaming | WeightConverter] | None]:
     """Build, validate, and install one target at a time to bound live storage.
 
@@ -668,24 +647,13 @@ def apply_module_replacements(
     context = MappingProxyType(dict(context or {}))
     source_shapes = _named_tensor_shapes(model) if plan.targets and capture_checkpoint_metadata else None
     extra_transforms: list[WeightRenaming | WeightConverter] = []
-    ordered_specs = plan.specs or tuple(
-        target.spec
-        for index, target in enumerate(plan.targets)
-        if id(target.spec) not in {id(previous.spec) for previous in plan.targets[:index]}
-    )
-    spec_indexes = {id(spec): index for index, spec in enumerate(ordered_specs)}
-    applications = []
     for target in plan.targets:
-        spec_index = spec_indexes.get(id(target.spec), 0)
-        applications.append(
-            _install_replacement_target(
-                model,
-                target,
-                context,
-                extra_transforms,
-                weights_mapping,
-                _replacement_rule_id(target.spec, spec_index),
-            )
+        _install_replacement_target(
+            model,
+            target,
+            context,
+            extra_transforms,
+            weights_mapping,
         )
     if extra_transforms:
         if capture_checkpoint_metadata:
@@ -701,10 +669,4 @@ def apply_module_replacements(
     model._hp_replaced_module_fqns = tuple(  # pylint: disable=protected-access
         dict.fromkeys((*previous_replacements, *current_replacements))
     )
-    if observation_callback is not None:
-        observation_callback(
-            declarations=describe_replacement_declarations(ordered_specs),
-            applications=tuple(applications),
-            unmatched=(),
-        )
     return model, weights_mapping

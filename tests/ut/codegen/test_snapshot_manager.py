@@ -314,7 +314,8 @@ def test_snapshot_manager_maps_observed_replacement_without_rematching(
         "fqn": "block",
         "fqns": ["block"],
         "module_type": "tests.toy.SourceBlock",
-        "factory": "tests.toy.replace_block",
+        "factory": "tests.toy.ReplacementBlock",
+        "replacement_target": "tests.toy.replace_block",
         "exact_type": True,
     }]
     assert captured["meta"].emission_patches["module_replacements"] == [{

@@ -52,7 +52,8 @@ def replacement_records_from_snapshot(snapshot: Any) -> tuple[dict[str, Any], ..
             "fqn": application["primary_fqn"],
             "fqns": list(application["module_fqns"]),
             "module_type": source_type,
-            "factory": declaration["replacement_target"],
+            "factory": application["replacement_type"].replace(":", ".", 1),
+            "replacement_target": declaration["replacement_target"],
             "exact_type": bool(declaration["exact_type"]),
         }
         if declaration.get("static_arguments"):
