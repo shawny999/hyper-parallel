@@ -674,9 +674,9 @@ class ShardingPlanner:
                 therefore inferred only after ALL its descendants' parameters
                 have merged into it. On ``unknown`` the whole group's
                 parameters merge upward into the parent module. If still
-                unknown after backtracking to the root, attribute the group
-                to the parameter's own module (no template will match later
-                → warning and skip).
+                unknown after backtracking to the root, scatter each parameter
+                back to its own module (no template will match later, so the
+                replicated fallback or warning path handles it).
 
         (Fix for the merge-ordering hazard of the former tail-enqueue work
         queue: a parent enqueued by an early child — e.g. the MoE gate —

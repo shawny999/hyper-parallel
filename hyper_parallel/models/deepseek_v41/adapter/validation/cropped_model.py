@@ -29,9 +29,8 @@ from transformers.models.deepseek_v4.configuration_deepseek_v4 import (
 )
 
 from hyper_parallel.distributed.mesh import DistributedSetup
-from hyper_parallel.models._transformers import HyperAutoModelForCausalLM
+from hyper_parallel.models._transformers import HyperAutoModelForCausalLM, HyperAutoModelForImageTextToText
 from hyper_parallel.models.build_options import CompileConfig
-from hyper_parallel.components.checkpoint.quantized_hf_storage import validate_quantization_config
 
 
 def _scaled_dimension(value: int, divisor: int, field_name: str) -> int:
@@ -386,7 +385,6 @@ def build_deepseek_v41_validation_config(
         vision_parameter_divisor: int = 4,
         num_routed_experts: int = 16,
         exercise_post_training_indexer: bool = True,
-        enable_candidate_pool: bool = False,
         indexer_loss_coeff: float = 1.0e-3,
         router_aux_loss_coeff: float = 1.0e-4,
         router_bias_update_rate: float = 1.0e-3,
@@ -414,10 +412,6 @@ def build_deepseek_v41_validation_config(
         num_routed_experts: Routed-expert count for the crop; routing top-k and every MoE layer are retained.
         exercise_post_training_indexer: Bound the candidate pool so a 4K smoke
             exercises candidate selection before the released Reindex layers.
-            Only applies when enable_candidate_pool is True.
-        enable_candidate_pool: Retain hierarchical candidates when True. Defaults to False, which
-            disables candidate-specific crop remapping and preserves the
-            retained released Full/Reindex/Reuse roles with full-range causal indexing.
         indexer_loss_coeff: Sparse-stage Indexer KL coefficient.
         router_aux_loss_coeff: Sequence balancing coefficient; zero disables it.
         router_bias_update_rate: Per-step text/image correction-bias update speed; zero disables it.
@@ -432,22 +426,25 @@ def build_deepseek_v41_validation_config(
     Raises:
         ValueError: If the source, parameter crop, or assets are inconsistent.
     """
-    if not isinstance(enable_candidate_pool, bool):
-        raise ValueError(f"enable_candidate_pool must be a bool, got {enable_candidate_pool!r}")
     source, text, assets, assets_path, released_hidden_layers = _load_validation_sources(
         config_path, engram_assets_path
     )
     resolved_hidden_layers = _resolve_crop_depth(num_hidden_layers, released_hidden_layers, "num_hidden_layers")
     resolved_routed_experts = _resolve_routed_experts(text, num_routed_experts)
     dimensions = _scale_text_dimensions(text, text_parameter_divisor, assets)
-    config = _build_text_config(source, text, dimensions, resolved_hidden_layers, resolved_routed_experts)
-    _apply_v41_extension_fields(
-        config, source, text, assets, assets_path, resolved_hidden_layers,
-        exercise_post_training_indexer and enable_candidate_pool, indexer_loss_coeff,
+    config = _build_text_config(
+        source, text, dimensions, resolved_hidden_layers, resolved_routed_experts
     )
-    if not enable_candidate_pool:
-        config.v41_candidate_source_layer_id = -1
-        config.v41_candidate_topk_blocks = 0
+    _apply_v41_extension_fields(
+        config,
+        source,
+        text,
+        assets,
+        assets_path,
+        resolved_hidden_layers,
+        exercise_post_training_indexer,
+        indexer_loss_coeff,
+    )
     config.router_aux_loss_coef = float(router_aux_loss_coeff)
     config.router_bias_update_rate = float(router_bias_update_rate)
     _apply_v41_vision_fields(
@@ -465,8 +462,11 @@ def build_deepseek_v41_validation_config(
         dspark_confidence_coeff,
     )
     _apply_engram_host_fields(
-        config, engram_storage_backend, engram_max_pending_entries,
-        engram_max_sparse_rows_per_step, engram_sparse_adam_config,
+        config,
+        engram_storage_backend,
+        engram_max_pending_entries,
+        engram_max_sparse_rows_per_step,
+        engram_sparse_adam_config,
     )
     config._attn_implementation = "eager"  # pylint: disable=protected-access
     # Record the source identity the way AutoConfig.from_pretrained does; the
@@ -506,21 +506,15 @@ def build_cropped_deepseek_v41(
         swap_inputs: bool = False,
         activation_swap: str = "none",
         model_init_dtype: str = "float32",
-        codegen: bool = False,
-        codegen_config: Any | None = None,
-        load_base_model: bool = False,
-        enable_candidate_pool: bool = True,
-        verify_hf_weights: str | None = None,
 ) -> PreTrainedModel:
     """Build and parallelize a configurable V4.1 validation crop.
+
     Args:
         config_path: Local DeepSeek-V4.1 repository.
         engram_assets_path: Prepared scaled-Engram JSON file.
         num_routed_experts: Routed-expert count for the parameter crop.
-        exercise_post_training_indexer: Bound candidates and remap shallow crops for Reindex testing.
-            Only applies when enable_candidate_pool is True.
-        enable_candidate_pool: Enable hierarchical candidates. Defaults to False, which disables
-            candidate-specific remapping and preserves the retained released layer roles.
+        exercise_post_training_indexer: Exercise the Full/Reindex hierarchy at
+            native layer indices.
         indexer_loss_coeff: Sparse-stage Indexer KL coefficient.
         router_aux_loss_coeff: Sequence balancing coefficient; zero disables it.
         router_bias_update_rate: Per-step text/image correction-bias update speed; zero disables it.
@@ -539,40 +533,41 @@ def build_cropped_deepseek_v41(
         swap_inputs: Trainer-injected activation-swap input flag.
         activation_swap: Activation-swap mode.
         model_init_dtype: Final parameter initialization dtype.
-        codegen: Select the codegen ``gen`` backend for this build.
-        codegen_config: Optional codegen backend configuration.
-        load_base_model: Load local HF weights from config_path.
-        enable_candidate_pool: Retain the released Full/Reindex candidate pool.
-        verify_hf_weights: Optional report directory for checking loaded weights
-            against the HF checkpoint before the first forward or optimizer update.
     """
     config = build_deepseek_v41_validation_config(
-        config_path, engram_assets_path,
-        num_hidden_layers=num_hidden_layers, text_parameter_divisor=text_parameter_divisor,
-        enable_vision=enable_vision, vision_num_hidden_layers=vision_num_hidden_layers,
-        vision_parameter_divisor=vision_parameter_divisor, num_routed_experts=num_routed_experts,
+        config_path,
+        engram_assets_path,
+        num_hidden_layers=num_hidden_layers,
+        text_parameter_divisor=text_parameter_divisor,
+        enable_vision=enable_vision,
+        vision_num_hidden_layers=vision_num_hidden_layers,
+        vision_parameter_divisor=vision_parameter_divisor,
+        num_routed_experts=num_routed_experts,
         exercise_post_training_indexer=exercise_post_training_indexer,
-        enable_candidate_pool=enable_candidate_pool, indexer_loss_coeff=indexer_loss_coeff,
-        router_aux_loss_coeff=router_aux_loss_coeff, router_bias_update_rate=router_bias_update_rate,
-        dspark_depth=dspark_depth, dspark_target_layer_ids=dspark_target_layer_ids,
-        dspark_loss_coeff=dspark_loss_coeff, dspark_confidence_coeff=dspark_confidence_coeff,
-        engram_storage_backend=engram_storage_backend, engram_max_pending_entries=engram_max_pending_entries,
+        indexer_loss_coeff=indexer_loss_coeff,
+        router_aux_loss_coeff=router_aux_loss_coeff,
+        router_bias_update_rate=router_bias_update_rate,
+        dspark_depth=dspark_depth,
+        dspark_target_layer_ids=dspark_target_layer_ids,
+        dspark_loss_coeff=dspark_loss_coeff,
+        dspark_confidence_coeff=dspark_confidence_coeff,
+        engram_storage_backend=engram_storage_backend,
+        engram_max_pending_entries=engram_max_pending_entries,
         engram_max_sparse_rows_per_step=engram_max_sparse_rows_per_step,
         engram_sparse_adam_config=engram_sparse_adam_config,
     )
-    if not enable_candidate_pool:
-        config.v41_candidate_source_layer_id = -1
-        config.v41_candidate_topk_blocks = 0
     return _run_validation_model_builder(
         config,
-        torch_dtype=torch_dtype, validate_placement=validate_placement,
-        distributed_setup=distributed_setup, peft_config=peft_config,
-        compile_config=compile_config, activation_checkpoint=activation_checkpoint,
+        torch_dtype=torch_dtype,
+        validate_placement=validate_placement,
+        distributed_setup=distributed_setup,
+        peft_config=peft_config,
+        compile_config=compile_config,
+        activation_checkpoint=activation_checkpoint,
         activation_checkpoint_selection=activation_checkpoint_selection,
-        swap_inputs=swap_inputs, activation_swap=activation_swap,
-        model_init_dtype=model_init_dtype, codegen=codegen, codegen_config=codegen_config,
-        pretrained_path=config_path if load_base_model else None,
-        verify_hf_weights=verify_hf_weights,
+        swap_inputs=swap_inputs,
+        activation_swap=activation_swap,
+        model_init_dtype=model_init_dtype,
     )
 
 
@@ -589,133 +584,38 @@ def _run_validation_model_builder(
         swap_inputs: bool,
         activation_swap: str,
         model_init_dtype: str,
-        codegen: bool,
-        codegen_config: Any | None,
-        pretrained_path: str | None = None,
-        verify_hf_weights: str | None = None,
 ) -> PreTrainedModel:
     """Invoke the model builder with the trainer wiring."""
-    kwargs = {
-        "distributed_setup": distributed_setup,
-        "peft_config": peft_config,
-        "torch_dtype": torch_dtype,
-        "attn_implementation": "eager",
-        "validate_placement": validate_placement,
-        "compile_config": compile_config,
-        "activation_checkpoint": activation_checkpoint,
-        "activation_checkpoint_selection": activation_checkpoint_selection,
-        "swap_inputs": swap_inputs,
-        "activation_swap": activation_swap,
-        "model_init_dtype": model_init_dtype,
-        "codegen": codegen,
-        "codegen_config": codegen_config,
-    }
-    if pretrained_path is None:
-        if verify_hf_weights is not None:
-            raise ValueError("verify_hf_weights requires load_base_model=true")
-        return HyperAutoModelForCausalLM.from_config(config, **kwargs)
-    return _load_validation_hf_weights(config, pretrained_path, verify_hf_weights=verify_hf_weights, **kwargs)
-
-
-def _load_validation_hf_weights(config: DeepseekV4Config, pretrained_path: str, *,
-                                verify_hf_weights: str | None = None, **kwargs: Any) -> PreTrainedModel:
-    """Load the selected text/vision prefix through the shared HF checkpointer."""
-    source = Path(pretrained_path).expanduser().resolve()
-    official = json.loads((source / "config.json").read_text(encoding="utf-8"))
-    _validate_pretrained_dimensions(config, official)
-    quantization = official.get("quantization_config")
-    if quantization:
-        validate_quantization_config(quantization)
-        config.quantization_config = quantization
-    index = json.loads((source / "model.safetensors.index.json").read_text(encoding="utf-8"))
-    vision_layers = config.v41_vision_num_hidden_layers if config.v41_vision_enabled else 0
-    names = select_layer_crop_parameters(list(index["weight_map"]),
-                                         text_layers=config.num_hidden_layers, vision_layers=vision_layers)
-    names.extend(name for name in ("hc_head_fn", "hc_head_base", "hc_head_scale") if name in index["weight_map"])
-    if not config.v41_vision_enabled:
-        names = [name for name in names if not name.endswith(".bias_vl")]
-    if not names:
-        raise ValueError("No checkpoint parameters match the requested validation model")
-    selected = {name: index["weight_map"][name] for name in names}
-    for name in names:
-        if name.endswith("weight"):
-            for suffix in ("scale", "weight_scale_inv"):
-                scale_name = name[:-6] + suffix
-                if scale_name in index["weight_map"]:
-                    selected[scale_name] = index["weight_map"][scale_name]
-    with tempfile.TemporaryDirectory(prefix="deepseek_v41_validation_hf_") as temporary:
-        view = Path(temporary)
-        config.save_pretrained(view)
-        _write_hf_crop_index(source, view, selected, quantization)
-        return HyperAutoModelForCausalLM.from_pretrained(
-            str(view), verify_hf_weights=verify_hf_weights, **kwargs)
-
-
-def _validate_pretrained_dimensions(config: DeepseekV4Config, source: dict[str, Any]) -> None:
-    """Reject incompatible parameter crops before reading any weight payload."""
-    text = source["text_config"]
-    for name in ("hidden_size", "moe_intermediate_size", "num_attention_heads", "q_lora_rank", "o_lora_rank",
-                 "index_n_heads"):
-        actual = getattr(config, name)
-        if actual != text[name]:
-            raise ValueError(f"HF weight loading requires released {name}: expected {text[name]}, got {actual}")
-    if config.num_local_experts != text["n_routed_experts"]:
-        raise ValueError("HF weight loading requires the released num_routed_experts")
-    if config.v41_dspark_depth or hasattr(config, "v41_validation_reindex_remap"):
-        raise ValueError("HF weight loading does not support DSpark or remapped validation indexers")
-    if config.v41_engram_layer_ids:
-        _released_engram_assets(
-            source, config.v41_engram_assets_path, allow_padding=True,
-        )
-    if config.v41_vision_enabled:
-        for name in ("hidden_size", "intermediate_size", "num_attention_heads"):
-            if getattr(config, f"v41_vision_{name}") != source["vision_config"][name]:
-                raise ValueError(f"HF weight loading requires released vision {name}")
-
-
-def _released_engram_assets(source: dict[str, Any], assets_path: str, *,
-                            allow_padding: bool = False) -> dict[str, Any]:
-    """Reject scaled hashing assets when loading released Engram table weights."""
-    assets = json.loads(Path(assets_path).expanduser().read_text(encoding="utf-8"))
-    text = source["text_config"]
-    expected = {
-        "source_model_type": source["model_type"],
-        "num_hidden_layers": text["num_hidden_layers"],
-        "layer_ids": text["engram_layer_ids"],
-        "num_embeddings": text["engram_num_embeddings"],
-        "head_dim": text["engram_head_dim"],
-        "bucket_base": text["engram_vocab_size"],
-    }
-    for name, value in expected.items():
-        if assets.get(name) != value:
-            raise ValueError(f"Released Engram assets mismatch for {name}: expected {value}, got {assets.get(name)}")
-    padded_sizes = assets.get("padded_num_embeddings", assets["num_embeddings"])
-    if (len(padded_sizes) != len(assets["num_embeddings"])
-            or any(not isinstance(padded, int) or padded < logical
-                   for padded, logical in zip(padded_sizes, assets["num_embeddings"]))):
-        raise ValueError("Released Engram assets padding must cover every checkpoint table row")
-    if not allow_padding and padded_sizes != assets["num_embeddings"]:
-        raise ValueError("Released Engram assets must preserve checkpoint table row counts")
-    return assets
+    return HyperAutoModelForCausalLM.from_config(
+        config,
+        distributed_setup=distributed_setup,
+        peft_config=peft_config,
+        torch_dtype=torch_dtype,
+        attn_implementation="eager",
+        validate_placement=validate_placement,
+        compile_config=compile_config,
+        activation_checkpoint=activation_checkpoint,
+        activation_checkpoint_selection=activation_checkpoint_selection,
+        swap_inputs=swap_inputs,
+        activation_swap=activation_swap,
+        model_init_dtype=model_init_dtype,
+    )
 
 
 def build_layer_cropped_config(
         source: dict[str, Any], destination: Path, *, text_layers: int = 1, vision_layers: int = 2,
-        engram_assets_path: str | None = None, engram_storage_backend: str = "device",
 ) -> Any:
     """Translate a released config, retaining a dependency-closed layer prefix.
 
     All parameter dimensions, expert counts, routing top-k, and modality widths
-    retain their released values. Prefixes containing Engram require matching
-    released hashing assets, rather than the scaled assets of a random-init crop.
+    retain their released values. Prefixes containing Engram require released
+    hashing assets and are deliberately rejected by this initial smoke builder.
 
     Args:
         source: Official composite DeepSeek-V4.1 configuration.
-        destination: Directory for the translated config and its Engram assets.
+        destination: Directory for the translated config and empty Engram assets.
         text_layers: Number of original decoder prefix layers to retain.
         vision_layers: Number of original vision prefix layers; zero disables vision.
-        engram_assets_path: Released-size hashing assets required by retained Engram layers.
-        engram_storage_backend: Keep Engram tables on the device or their EP owners' hosts.
 
     Returns:
         Translated configuration accepted by the production model class.
@@ -730,14 +630,12 @@ def build_layer_cropped_config(
     if not 0 <= vision_layers <= vision["num_hidden_layers"]:
         raise ValueError("vision_layers must select a prefix of the released vision tower")
     retained_engram = [layer for layer in text["engram_layer_ids"] if layer < text_layers]
-    if retained_engram and engram_assets_path is None:
+    if retained_engram:
         raise ValueError(f"Retained Engram layers require released hashing assets: {retained_engram}")
     destination.mkdir(parents=True, exist_ok=True)
     assets = {"source_model_type": source["model_type"], "num_hidden_layers": text_layers,
               "layer_ids": [], "num_embeddings": [], "head_dim": text["engram_head_dim"],
               "bucket_base": text["engram_vocab_size"], "table_pad_multiple": 1}
-    if retained_engram:
-        assets = _released_engram_assets(source, engram_assets_path, allow_padding=engram_storage_backend == "host")
     assets_path = (destination / "engram_assets.json").resolve()
     assets_path.write_text(json.dumps(assets, indent=2), encoding="utf-8")
     # Share the model-owned translation while selecting divisor one; independent
@@ -752,12 +650,13 @@ def build_layer_cropped_config(
         config.v41_candidate_topk_blocks = 0
     config.v41_dspark_depth = 0
     config.v41_dspark_target_layer_ids = []
-    _apply_engram_host_fields(config, engram_storage_backend, 1000000, 1000000, None)
     _apply_v41_vision_fields(
         config, source, enable_vision=vision_layers > 0,
         vision_num_hidden_layers=vision_layers if vision_layers > 0 else None, vision_parameter_divisor=1,
     )
     config.v41_vision_num_hidden_layers = vision_layers
+    config.v41_original_layer_ids = list(range(text_layers))
+    config.v41_original_vision_layer_ids = list(range(vision_layers))
     config.save_pretrained(destination)
     return config
 
@@ -796,33 +695,67 @@ def select_layer_crop_parameters(
     return selected
 
 
-def _write_hf_crop_index(source: Path, view: Path, selected: dict[str, str], quantization: Any) -> None:
-    """Link selected source shards and record their physical tensor byte sizes."""
-    by_shard: dict[str, list[str]] = {}
-    for name, shard in selected.items():
-        by_shard.setdefault(shard, []).append(name)
-    total_size = 0
-    for number, (shard, shard_names) in enumerate(by_shard.items()):
-        path = (source / shard).resolve()
-        with safe_open(str(path), framework="pt", device="cpu") as reader:
+def build_hf_layer_cropped_deepseek_v41(
+        pretrained_model_name_or_path: str, *, text_layers: int = 1, vision_layers: int = 2,
+        **kwargs: Any,
+) -> Any:
+    """Build a prefix crop at runtime and load its weights from a local BF16 HF directory.
+
+    Args:
+        pretrained_model_name_or_path: Full BF16 weights with the official composite config.
+        text_layers: Number of decoder prefix layers to retain, without resizing parameters.
+        vision_layers: Number of visual prefix layers to retain.
+        **kwargs: Forwarded HyperAutoModel build and parallelization options.
+
+    Returns:
+        Parallelized model loaded through the HF checkpointer.
+
+    Raises:
+        ValueError: The input is quantized or incompatible with this prefix crop.
+    """
+    source = Path(pretrained_model_name_or_path).expanduser().resolve()
+    official = json.loads((source / "config.json").read_text(encoding="utf-8"))
+    if official.get("model_type") != "deepseek_v41" or "text_config" not in official:
+        raise ValueError("Expected full HF weights with the official composite DeepSeek-V4.1 config")
+    if official.get("quantization_config"):
+        raise ValueError("Convert the input weights to BF16 before runtime layer cropping")
+    index = json.loads((source / "model.safetensors.index.json").read_text(encoding="utf-8"))
+    names = select_layer_crop_parameters(list(index["weight_map"]),
+                                         text_layers=text_layers, vision_layers=vision_layers)
+    if not names:
+        raise ValueError("No checkpoint parameters match the requested crop")
+    # Each rank owns a tiny temporary view; weight files remain in the original directory.
+    with tempfile.TemporaryDirectory(prefix="deepseek_v41_hf_crop_") as temporary:
+        view = Path(temporary)
+        build_layer_cropped_config(official, view, text_layers=text_layers, vision_layers=vision_layers)
+        selected = {name: index["weight_map"][name] for name in names}
+        by_shard: dict[str, list[str]] = {}
+        for name, shard in selected.items():
+            by_shard.setdefault(shard, []).append(name)
+        total_size = 0
+        for number, (shard, shard_names) in enumerate(by_shard.items()):
+            path = (source / shard).resolve()
+            with safe_open(str(path), framework="pt", device="cpu") as reader:
+                for name in shard_names:
+                    tensor_slice = reader.get_slice(name)
+                    dtype = tensor_slice.get_dtype()
+                    if dtype not in ("BF16", "F32"):
+                        raise ValueError(f"Expected BF16/FP32 source parameter: {name}")
+                    total_size += math.prod(tensor_slice.get_shape()) * (2 if dtype == "BF16" else 4)
+            link = view / f"source-{number:05d}.safetensors"
+            link.symlink_to(path)
             for name in shard_names:
-                tensor_slice = reader.get_slice(name)
-                dtype = tensor_slice.get_dtype()
-                if not quantization and dtype not in ("BF16", "F32"):
-                    raise ValueError(f"Expected BF16/FP32 source parameter: {name}")
-                bytes_per_element = {"BF16": 2, "F32": 4}.get(dtype, 1)
-                total_size += math.prod(tensor_slice.get_shape()) * bytes_per_element
-        link = view / f"source-{number:05d}.safetensors"
-        link.symlink_to(path)
-        for name in shard_names:
-            selected[name] = link.name
-    (view / "model.safetensors.index.json").write_text(
-        json.dumps({"metadata": {"total_size": total_size}, "weight_map": selected}), encoding="utf-8")
+                selected[name] = link.name
+        (view / "model.safetensors.index.json").write_text(
+            json.dumps({"metadata": {"total_size": total_size}, "weight_map": selected}), encoding="utf-8")
+        kwargs.setdefault("attn_implementation", "eager")
+        return HyperAutoModelForImageTextToText.from_pretrained(str(view), **kwargs)
 
 
 __all__ = [
     "build_cropped_deepseek_v41",
     "build_deepseek_v41_validation_config",
+    "build_hf_layer_cropped_deepseek_v41",
     "build_layer_cropped_config",
     "select_layer_crop_parameters",
 ]

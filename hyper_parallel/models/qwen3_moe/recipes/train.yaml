@@ -53,41 +53,34 @@ plan_overrides:
       - "*.input_layernorm"
       - "*.post_attention_layernorm"
       - model.norm
-    replace:
-      kind: module
-      source_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm
-      implementation:
-        _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm
+    module_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm
+    replace_module:
+      _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm
   - match: "*.self_attn"
-    replace:
-      kind: module
-      source_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention
-      implementation:
-        _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention
+    module_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention
+    replace_module:
+      _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention
   # The experts module is always the same grouped-GEMM implementation;
   # enabling EP changes only token dispatch/combine around this boundary.
   - match: "*.mlp.experts"
-    replace:
-      kind: module
-      source_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts
-      implementation:
-        _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts
+    module_type: transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts
+    replace_module:
+      _target_: hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts
   # This CP wrapper accepts Online global block masks and falls back to an
   # implicit offset-aware causal mask for Offline Indexed Dataset input.
-  - match: "*.self_attn.forward"
+  - match: "*.self_attn"
     when: cp
-    replace:
-      kind: method
-      implementation:
-        _target_: hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper
+    region_dispatch: false
+    inner_target: self
+    inner_wrapper:
+      _target_: hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper
   # EP conditional override: Qwen3-MoE TopKRouter archetype compute.
-  - match: "*.mlp.forward"
+  - match: "*.mlp"
     when: ep
-    replace:
-      kind: method
-      implementation:
-        _target_: hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn
-        use_grouped_gemm: true
+    region_dispatch: false
+    local_compute_fn:
+      _target_: hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn
+      use_grouped_gemm: true
 
 mixed_precision:
   enabled: false
@@ -187,13 +180,13 @@ debug:
   check_nan_inf: false
   check_dataset: null
 
-profiler:
-  enable: false
-  start_step: 1
-  stop_step: 10
-  memory: true
-  rank_ids: null
-  output_path: ./outputs/qwen3_moe
-  level: 1
+profiling:
+  enabled: false
+  start_step: 3
+  end_step: 4
+  trace_dir: ./outputs/qwen3_moe/profiling
+  record_shapes: false
+  profile_memory: false
   with_stack: false
-  data_simplification: false
+  with_modules: false
+  rank: 0
