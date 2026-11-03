@@ -203,14 +203,7 @@ def test_training_args_only_parse_config(
 def test_deepseek_v41_engram_params_target_planner_boundary() -> None:
     """Shipped recipes keep Engram params on the module boundary."""
     repo_root = Path(manager.__file__).resolve().parents[2]
-    model_recipe = (
-        repo_root
-        / "hyper_parallel"
-        / "models"
-        / "deepseek_v41"
-        / "recipes"
-        / "deepseek_v41_codegen.yaml"
-    )
+    model_recipe = repo_root / "hyper_parallel" / "models" / "deepseek_v41" / "recipes" / "train.yaml"
     demo_recipes = (repo_root / "examples" / "training_demo" / "deepseek_v41").glob("*.yaml")
     checked_demo_recipes = []
 
@@ -238,6 +231,32 @@ def test_deepseek_v41_engram_params_target_planner_boundary() -> None:
         assert method_entry["match"] == "model.layers.*.engram.forward", recipe_path
 
     assert checked_demo_recipes
+
+
+def test_supported_models_use_training_recipes_for_codegen() -> None:
+    """Each supported family has one canonical, trainable Codegen input."""
+    repo_root = Path(manager.__file__).resolve().parents[2]
+    model_recipes = repo_root / "hyper_parallel" / "models"
+    expected = {
+        model_recipes / family / "recipes" / "train.yaml"
+        for family in (
+            "deepseek_v3",
+            "deepseek_v32",
+            "deepseek_v41",
+            "kimi_k26",
+            "kimi_k3",
+            "kimi_linear",
+            "qwen2_moe",
+            "qwen3",
+            "qwen3_5",
+            "qwen3_vl_moe",
+        )
+    }
+    expected.add(repo_root / "examples" / "training_demo" / "qwen3_moe" / "train_parallel_online.yaml")
+
+    assert all(path.is_file() for path in expected)
+    assert not list(model_recipes.glob("*/recipes/*_codegen.yaml"))
+    assert not list((repo_root / "examples" / "training_demo").rglob("*_codegen.yaml"))
 
 
 def test_codegen_layout_prefers_model_anchored_bundle_for_known_families(

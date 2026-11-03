@@ -17,7 +17,8 @@ python -c "import hyper_parallel; print(hyper_parallel.__file__)"
 
 ### 1.2 在 YAML 中指定 Hugging Face 模型
 
-用户只需要维护 Codegen YAML，在 YAML 的 `model.pretrained_model_name_or_path` 中指定模型来源即可，例如：
+Codegen 和 Trainer 使用同一份训练 YAML。用户只需要维护训练配置，并在
+`model.pretrained_model_name_or_path` 中指定模型来源，例如：
 
 ```yaml
 model:
@@ -40,9 +41,11 @@ Codegen 会通过这个地址读取 Hugging Face 模型自带的结构配置和�
 
 生成时不需要准备模型权重、tokenizer、训练数据、checkpoint 或 NPU/GPU 运行环境。
 
-### 1.3 准备 YAML
+### 1.3 准备训练 YAML
 
-YAML 至少要指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以及需要应用的模块或 forward 替换规则。建议复制最接近的内置 recipe 后修改，不要从空文件开始编写。
+这份 YAML 同时用于原生训练、CLI 生成、Trainer 自动生成和 generated model 训练，不需要再准备单独的
+Codegen 配置。YAML 至少要指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以及需要应用的模块或
+forward 替换规则。建议复制最接近的 `recipes/train.yaml` 或 training demo 后修改，不要从空文件开始编写。
 
 ## 2. CLI 命令
 
@@ -51,7 +54,7 @@ YAML 至少要指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以�
 
 ```bash
 python -m hyper_parallel.codegen --verbose generate \
-  --config hyper_parallel/models/qwen3_moe/recipes/qwen3_moe_codegen.yaml
+  --config examples/training_demo/qwen3_moe/train_parallel_online.yaml
 ```
 
 ## 3. Codegen Bundle

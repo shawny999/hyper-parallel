@@ -66,6 +66,7 @@ class ConstructorReplacePatch:
     mode: Literal["name", "wrap_source"] = "name"
     keyword_args: tuple[str, ...] = ()
     scope_attrs: tuple[str, ...] = ()
+    scope_fqns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -76,9 +76,10 @@ class ReplacementTarget:
 class InnerWrapperTarget:
     """Source-visible helper and companion mesh attribute of an inner wrapper."""
 
-    helper_module: str
-    helper_name: str
+    helper_module: str | None = None
+    helper_name: str | None = None
     state_attr: str | None = None
+    inline_body: str | None = None
 
 
 def class_name_of(qualified_type: str | None) -> str | None:
@@ -246,7 +247,10 @@ def inner_wrapper_target(factory_path: str | None) -> InnerWrapperTarget | None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
     if not helper_name or helper_name not in module_functions:
-        return None
+        inline_body = _nested_forward_body(request_owner, replacement_name)
+        if inline_body is None:
+            return None
+        return InnerWrapperTarget(inline_body=inline_body)
     return InnerWrapperTarget(
         helper_module=module_name,
         helper_name=helper_name,
@@ -327,6 +331,117 @@ def _cp_mesh_companion_attr(tree: ast.AST) -> str | None:
                 and value.id == "cp_mesh"
             ):
                 return key.value
+    return None
+
+
+def _nested_forward_body(tree: ast.AST, replacement_name: str | None) -> str | None:
+    """Lower a closure-backed rewrite into an imported-host dispatch body.
+
+    A custom wrapper may build its replacement forward as a nested closure
+    instead of delegating to a module-level helper.  The closure remains
+    source-visible when its captured values are also published through the
+    request's ``companion_attrs`` mapping.  In that form, replace captured
+    state reads with instance attributes and the saved original forward with
+    ``super().forward``; the imported-host materializer supplies the subclass.
+    """
+    if not replacement_name:
+        return None
+    forward = next(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == replacement_name
+        ),
+        None,
+    )
+    if forward is None:
+        return None
+    companion_attrs = _companion_attr_bindings(tree)
+    original_forward = _original_forward_binding(tree)
+    if original_forward is None:
+        return None
+
+    class ClosureBindings(ast.NodeTransformer):
+        """Rewrite captured closure bindings to generated-instance state."""
+
+        def visit_Name(self, node: ast.Name) -> ast.AST:  # noqa: N802
+            attr = companion_attrs.get(node.id)
+            if attr is None:
+                return node
+            return ast.copy_location(
+                ast.Attribute(
+                    value=ast.Name(id="self", ctx=ast.Load()),
+                    attr=attr,
+                    ctx=node.ctx,
+                ),
+                node,
+            )
+
+        def visit_Call(self, node: ast.Call) -> ast.AST:  # noqa: N802
+            node = self.generic_visit(node)
+            if isinstance(node.func, ast.Name) and node.func.id == original_forward:
+                node.func = ast.Attribute(
+                    value=ast.Call(
+                        func=ast.Name(id="super", ctx=ast.Load()),
+                        args=[],
+                        keywords=[],
+                    ),
+                    attr="forward",
+                    ctx=ast.Load(),
+                )
+            return node
+
+    body = list(forward.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    lowered = [ClosureBindings().visit(ast.fix_missing_locations(node)) for node in body]
+    if not lowered:
+        return None
+    active = "\n".join(ast.unparse(node) for node in lowered)
+    return (
+        "if self.cp_enable:\n"
+        f"{textwrap.indent(active, '    ')}\n\n"
+        "return self._forward_impl(__hp_forward_args__)"
+    )
+
+
+def _companion_attr_bindings(tree: ast.AST) -> dict[str, str]:
+    """Map closure variable names to their published companion attributes."""
+    result: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.keyword) or node.arg != "companion_attrs":
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Name)
+            ):
+                result[value.id] = key.value
+    return result
+
+
+def _original_forward_binding(tree: ast.AST) -> str | None:
+    """Return the local name that saves ``target.forward`` before rewriting."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Attribute)
+            and value.attr == "forward"
+        ):
+            return target.id
     return None
 
 

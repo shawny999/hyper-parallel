@@ -428,6 +428,12 @@ def _cp_strategy_spec(target: str) -> StrategySpec:
     resolved = inner_wrapper_target(target)
     if resolved is None:
         return StrategySpec(kind=CP_ATTENTION_KIND, imports=())
+    if resolved.inline_body is not None:
+        return StrategySpec(
+            kind=CP_ATTENTION_KIND,
+            subclass_shell=resolved.inline_body,
+            imports=(),
+        )
     from hyper_parallel.codegen.inline.templates import (  # pylint: disable=C0415
         cp_dispatch_shell_body,
     )

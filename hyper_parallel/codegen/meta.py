@@ -287,9 +287,13 @@ def validate_snapshot_state_contract(data: dict[str, Any]) -> None:
     parallelize = (data.get("entrypoints") or {}).get("parallelize")
 
     if status == CodegenStatus.DERIVED.value:
-        if not data.get("param_plan") or not plan_application:
+        replacement_applications = (
+            (data.get("snapshot_replacements") or {}).get("applications") or []
+        )
+        if (not data.get("param_plan") and not replacement_applications) or not plan_application:
             raise ValueError(
-                "derived snapshot metadata requires a non-empty param_plan and plan_application"
+                "derived snapshot metadata requires plan_application and either "
+                "a non-empty param_plan or observed replacement applications"
             )
         if covered.get("sharding_plan") is not True:
             raise ValueError("derived snapshot metadata must cover sharding_plan")

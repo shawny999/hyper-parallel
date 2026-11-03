@@ -34,6 +34,24 @@ def test_derived_session_finishes_idempotently():
     assert first.status is CodegenStatus.DERIVED
 
 
+def test_session_reports_observed_replacement_applications():
+    session = CodegenBuildSession()
+    assert session.has_replacement_applications is False
+
+    session.record_replacements(
+        applications=[{
+            "rule_id": "replace:0",
+            "module_fqns": ["block"],
+            "primary_fqn": "block",
+            "source_type": "tests:SourceBlock",
+            "replacement_type": "tests:ReplacementBlock",
+            "weight_transforms": [],
+        }],
+    )
+
+    assert session.has_replacement_applications is True
+
+
 def test_not_required_session_has_stable_reason():
     session = CodegenBuildSession()
     session.record_source({"model_type": "toy"})

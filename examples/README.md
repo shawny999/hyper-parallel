@@ -24,7 +24,7 @@ examples/
 ## AutoModel Trainer Example
 
 The delivered Qwen3-MoE AutoModel training recipe lives at
-`hyper_parallel/models/qwen3_moe/recipes/train.yaml` inside the
+`examples/training_demo/qwen3_moe/train_parallel_online.yaml` inside the
 package (shipped in the wheel). Model, dataset, optimizer, and parallel
 components are selected through typed targets in `train.yaml`.
 

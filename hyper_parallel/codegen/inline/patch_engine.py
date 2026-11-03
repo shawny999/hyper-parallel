@@ -66,6 +66,13 @@ def apply_patch_set(source_text: str, patch_set: InlinePatchSet) -> str:
         wave_edits = _constructor_edits(text, wave, hits)
         if wave_edits:
             text = apply_edits(text, wave_edits)
+    deferred_edits = _deferred_replacement_edits(
+        text,
+        patch_set.constructor_replaces,
+        hits,
+    )
+    if deferred_edits:
+        text = apply_edits(text, deferred_edits)
     if patch_set.constructor_replaces:
         _require_scoped_rewrites(patch_set.constructor_replaces, hits)
 
@@ -280,6 +287,93 @@ def _require_scoped_rewrites(
             f"{missing}; the plan replaced modules of this type, so the "
             "replacement cannot be sunk without diverging from the plan"
         )
+
+
+def _deferred_replacement_edits(
+    source_text: str,
+    patches: Iterable[ConstructorReplacePatch],
+    hits: dict[str, int],
+) -> list[TextEdit]:
+    """Install observed wrappers after an imported owner built its subtree.
+
+    Some source models inherit a decoder whose constructor lives in an
+    installed dependency. The copied modeling unit therefore has no direct
+    constructor call to rewrite. For a wrap-style replacement, the native
+    operation is still expressible exactly: wait until the root model has
+    built the observed FQNs, then replace those module attributes in place.
+    """
+    pending = [
+        patch
+        for patch in patches
+        if patch.scope_fqns and not hits.get(patch.old_ctor)
+    ]
+    if not pending:
+        return []
+    tree = ast.parse(source_text)
+    offsets = _line_offsets(source_text)
+    insertions: dict[int, list[str]] = defaultdict(list)
+    for patch in pending:
+        if patch.mode != "wrap_source":
+            continue
+        root_attr = patch.scope_fqns[0].split(".", 1)[0]
+        constructors = _root_constructors(tree, root_attr)
+        if len(constructors) != 1:
+            continue
+        function = constructors[0]
+        _, end = _node_span(function.body[-1], offsets)
+        insertions[end].append(_render_deferred_replacement(patch))
+        hits[patch.old_ctor] += 1
+    return [
+        TextEdit(offset, offset, "".join(parts))
+        for offset, parts in insertions.items()
+    ]
+
+
+def _root_constructors(tree: ast.Module, root_attr: str) -> list[ast.FunctionDef]:
+    """Return constructors that establish the first segment of an observed FQN."""
+    constructors = []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for child in node.body:
+            if not isinstance(child, ast.FunctionDef) or child.name != "__init__":
+                continue
+            if any(
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and target.attr == root_attr
+                for item in ast.walk(child)
+                if isinstance(item, (ast.Assign, ast.AnnAssign))
+                for target in (
+                    item.targets if isinstance(item, ast.Assign) else (item.target,)
+                )
+            ):
+                constructors.append(child)
+    return constructors
+
+
+def _render_deferred_replacement(patch: ConstructorReplacePatch) -> str:
+    """Render an exact-FQN replacement loop inside a root constructor."""
+    arguments = [
+        argument
+        for argument in patch.keyword_args
+        if not argument.startswith("module_fqn=")
+    ]
+    extra = "".join(f", {argument}" for argument in arguments)
+    fqns = repr(tuple(patch.scope_fqns))
+    return (
+        "\n        _hp_replacement_cache = {}\n"
+        f"        for _hp_fqn in {fqns}:\n"
+        "            _hp_parent_fqn, _, _hp_name = _hp_fqn.rpartition('.')\n"
+        "            _hp_parent = self.get_submodule(_hp_parent_fqn)\n"
+        "            _hp_source = getattr(_hp_parent, _hp_name)\n"
+        "            _hp_key = id(_hp_source)\n"
+        "            if _hp_key not in _hp_replacement_cache:\n"
+        f"                _hp_replacement_cache[_hp_key] = {patch.new_ctor}(\n"
+        f"                    module=_hp_source, module_fqn=_hp_fqn{extra})\n"
+        "            setattr(_hp_parent, _hp_name, _hp_replacement_cache[_hp_key])"
+    )
 
 
 def _drop_nested_edits(edits: list[TextEdit]) -> list[TextEdit]:

@@ -75,10 +75,11 @@ def render_inline_modeling(
     strategy_patches = build_strategy_patches(
         strategy_rules,
         model_type,
-        getattr(meta, "boundary_classes", None),
+        _observed_boundary_classes(meta, patch_plan),
         getattr(meta, "external_state_classes", None),
     )
     patch_set = _merge_patch_sets(replacement_patches, strategy_patches)
+    _add_recorded_forward_host_imports(source_text, patch_set, patch_plan)
     _materialize_imported_forward_hosts(source_text, patch_set)
     rendered = apply_patch_set(source_text, patch_set)
     # The copied modeling source brings its own decorated helpers that share
@@ -94,6 +95,72 @@ def render_inline_modeling(
     )
     normalize_inline_meta(meta, strategy_rules, model_type)
     return rendered
+
+
+def _add_recorded_forward_host_imports(
+    source_text: str,
+    patch_set: InlinePatchSet,
+    patch_plan: Any,
+) -> None:
+    """Expose observed replacement hosts needed by a forward rewrite.
+
+    A replacement application can be observed after the root model has built,
+    while its constructor belongs to an imported decoder rather than the copied
+    top-level source.  In that case the frozen replacement record is the source
+    of truth for the concrete host type.  Add its real import so the generic
+    imported-host materializer can emit the CP dispatch class.
+    """
+    source_classes = {
+        node.name
+        for node in ast.parse(source_text).body
+        if isinstance(node, ast.ClassDef)
+    }
+    imported_names = {
+        name
+        for item in patch_set.imports
+        if not item.raw
+        for name in item.names
+    }
+    replacements = (
+        getattr(patch_plan, "module_replacements", ())
+        if patch_plan is not None
+        else ()
+    )
+    replacement_types = {
+        record.replacement_type.__name__: record.replacement_type
+        for record in replacements
+    }
+    for patch in patch_set.forward_extracts:
+        if patch.class_name in source_classes or patch.class_name in imported_names:
+            continue
+        replacement_type = replacement_types.get(patch.class_name)
+        if replacement_type is None:
+            continue
+        patch_set.imports.append(
+            ImportPatch(replacement_type.__module__, (replacement_type.__name__,))
+        )
+        imported_names.add(patch.class_name)
+
+
+def _observed_boundary_classes(meta: Any, patch_plan: Any) -> dict[str, str]:
+    """Return boundary owners after native inner-wrapper target resolution."""
+    classes = dict(getattr(meta, "boundary_classes", None) or {})
+    wrappers = (
+        getattr(patch_plan, "inner_wrappers", ())
+        if patch_plan is not None
+        else ()
+    )
+    for record in wrappers:
+        target_type = getattr(record, "target_type", None)
+        if target_type is None:
+            continue
+        target_fqn = (
+            record.module_fqn
+            if record.target_fqn == "self"
+            else f"{record.module_fqn}.{record.target_fqn}"
+        )
+        classes[target_fqn] = target_type.__name__
+    return classes
 
 
 def _materialize_imported_forward_hosts(
@@ -177,7 +244,7 @@ def render_inline_strategies_for_source_unit(
     patches = build_strategy_patches(
         strategy_rules,
         model_type,
-        getattr(meta, "boundary_classes", None),
+        _observed_boundary_classes(meta, patch_plan),
         getattr(meta, "external_state_classes", None),
     )
     source_classes = {

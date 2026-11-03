@@ -21,7 +21,7 @@ def collect_inline_rules(meta: Any) -> tuple[InlineRule, ...]:
 
     rules: list[InlineRule] = []
     for record in getattr(meta, "module_overrides", None) or []:
-        target = record.get("factory")
+        target = _replacement_target(record)
         if not target:
             continue
         rules.append(
@@ -44,6 +44,26 @@ def collect_inline_rules(meta: Any) -> tuple[InlineRule, ...]:
             )
         )
     return tuple(rules)
+
+
+def _replacement_target(record: dict[str, Any]) -> Any:
+    """Keep a model-owned factory contract; otherwise use the observed type.
+
+    The native observation proves which concrete type was installed, while a
+    factory under the model adapter convention also carries source-emission
+    facts such as the interface passed into a generic component.  Targets
+    outside that convention remain represented by the observed replacement
+    type and require no model-specific handling here.
+    """
+    declared = record.get("replacement_target")
+    parts = str(declared or "").split(".")
+    if (
+        len(parts) >= 4
+        and parts[:2] == ["hyper_parallel", "models"]
+        and parts[3] == "adapter"
+    ):
+        return declared
+    return record.get("factory")
 
 
 def _matches(record: dict[str, Any]) -> tuple[str, ...]:

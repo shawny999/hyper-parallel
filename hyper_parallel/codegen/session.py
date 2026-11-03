@@ -54,6 +54,11 @@ class CodegenBuildSession:
         """Return the current session status."""
         return self._status
 
+    @property
+    def has_replacement_applications(self) -> bool:
+        """Whether native model construction installed any replacement."""
+        return bool(self._replacements.applications)
+
     def record_source(self, source: Mapping[str, Any]) -> None:
         """Record source and model identity once while collecting."""
         self._require_open(CodegenStatus.COLLECTING)

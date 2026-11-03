@@ -1,27 +1,27 @@
-# codegen combination-test case: qwen3_vl_moe tp=2 cp=1 ep=2 pp=1
+# Qwen3-VL-MoE 8-card multimodal training recipe.
 model:
   _target_: hyper_parallel.models.HyperAutoModelForImageTextToText.from_pretrained
-  pretrained_model_name_or_path: path/to/qwen3_vl_moe
+  pretrained_model_name_or_path: Qwen/Qwen3-VL-30B-A3B-Instruct
   torch_dtype: bfloat16
   attn_implementation: eager
   force_hf: false
 
 training:
-  train_iters: 1
-  global_batch_size: 1
+  train_iters: 3
+  global_batch_size: 8
   micro_batch_size: 1
   backend: hccl
   init_device: meta
   seed: 42
 
 accelerator:
-  tp_size: 2
+  tp_size: 1
   cp_size: 1
-  ep_size: 2
+  ep_size: 8
   pp_size: 1
 
 fsdp_config:
-  dp_shard_size: 4
+  dp_shard_size: 8
 
 mixed_precision:
   enabled: false
@@ -66,3 +66,34 @@ plan_overrides:
       kind: method
       implementation:
         _target_: hyper_parallel.models.qwen3_vl_moe.adapter.distributed.context_parallel.qwen3_vl_moe_async_ulysses_cp_wrapper
+
+dataset:
+  training_mode: sft
+  model_assets:
+    _target_: hyper_parallel.data.omni.build_auto_processor
+    pretrained_model_name_or_path: Qwen/Qwen3-VL-30B-A3B-Instruct
+    trust_remote_code: false
+    local_files_only: false
+  data_transform:
+    _target_: hyper_parallel.data.omni.AutoProcessorTransform
+    max_seq_len: 4096
+  _target_: hyper_parallel.data.omni.build_online_omni_mapping_dataset
+  data_path: /path/to/qwen3_vl_moe/data.json
+  data_config: {}
+
+dataloader:
+  _target_: hyper_parallel.data.batching.OmniPackingLoader
+  collate_fn:
+    _target_: hyper_parallel.data.batching.build_omni_collate_fn
+  get_batch:
+    _target_: hyper_parallel.data.batching.OmniParallelBatch
+  sampler_type: single
+  token_budget: 4096
+  min_buffered_samples: 1
+  data_rearrange_map: null
+  data_sharding: false
+  drop_last: true
+  use_background_prefetcher: false
+  num_workers: 0
+  pin_memory: false
+  prefetch_factor: null

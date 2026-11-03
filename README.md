@@ -41,7 +41,7 @@ HyperParallel 面向昇腾超节点提供分布式并行加速能力。针对资
 
 ## 📣 最新消息
 
-- [Aug. 25, 2026]: [Qwen/Qwen3-30B-A3B 模型支持](hyper_parallel/models/qwen3_moe/recipes/train.yaml)
+- [Aug. 25, 2026]: [Qwen/Qwen3-30B-A3B 模型支持](examples/training_demo/qwen3_moe/train_parallel_online.yaml)
 
 ---
 
@@ -53,7 +53,7 @@ HyperParallel 面向昇腾超节点提供分布式并行加速能力。针对资
 >
 > **支持模型**
 >
-> - [Qwen3-30B-A3B](hyper_parallel/models/qwen3_moe/recipes/train.yaml)
+> - [Qwen3-30B-A3B](examples/training_demo/qwen3_moe/train_parallel_online.yaml)
 
 ### HyperParallel Core
 
@@ -95,18 +95,18 @@ HyperParallel 面向昇腾超节点提供分布式并行加速能力。针对资
 
 ### 使用 HyperParallel 启动模型训练
 
-运行仓库提供的单机 8 卡训练示例 [`hyper_parallel/models/qwen3_moe/recipes/train.yaml`](hyper_parallel/models/qwen3_moe/recipes/train.yaml)：
+运行仓库提供的单机 8 卡训练示例 [`examples/training_demo/qwen3_moe/train_parallel_online.yaml`](examples/training_demo/qwen3_moe/train_parallel_online.yaml)：
 
 ```bash
 torchrun --standalone --nproc_per_node=8 \
-  scripts/train_lm.py hyper_parallel/models/qwen3_moe/recipes/train.yaml
+  scripts/train_lm.py examples/training_demo/qwen3_moe/train_parallel_online.yaml
 ```
 
 附加命令行参数可按 YAML 字段路径覆盖配置值，无需修改配置文件：
 
 ```bash
 torchrun --standalone --nproc_per_node=8 \
-  scripts/train_lm.py hyper_parallel/models/qwen3_moe/recipes/train.yaml \
+  scripts/train_lm.py examples/training_demo/qwen3_moe/train_parallel_online.yaml \
   --model.pretrained_model_name_or_path=/path/to/model \
   --training.train_iters=10
 ```

@@ -180,11 +180,14 @@ def _observe_plan(
     if mesh is None:
         session.mark_not_required("mesh_unavailable")
         return
-    if is_hf_model and not model_sharding_requested:
-        session.mark_not_required("pure_data_parallel")
-        return
     if mesh.device_mesh is None:
         session.mark_not_required("device_mesh_unavailable")
+        return
+    if is_hf_model and not model_sharding_requested:
+        if session.has_replacement_applications:
+            _record_replacement_only_plan(mesh, session)
+        else:
+            session.mark_not_required("pure_data_parallel")
         return
     plan = sharding_planner.plan(
         model,
@@ -197,6 +200,40 @@ def _observe_plan(
     )
     session.observe_plan(plan, model, mesh)
     session.observe_plan_application(plan, None, validate_mode=False)
+
+
+def _record_replacement_only_plan(
+    mesh: Any,
+    session: CodegenBuildSession,
+) -> None:
+    """Derive an emitter snapshot when replacement is the only source patch."""
+    session.record_plan({
+        "param_plan": {},
+        "frozen_sharded_params": [],
+        "tied_pairs": [],
+        "special_handlers": {},
+        "boundary_classes": {},
+        "boundary_types": {},
+        "nested_components": [],
+        "mesh_dim_names": [],
+        "injections": [],
+        "parallel_dims": {
+            "dp_size": getattr(mesh, "dp_size", 1) if mesh is not None else 1,
+            "tp_size": getattr(mesh, "tp_size", 1) if mesh is not None else 1,
+            "cp_size": getattr(mesh, "cp_size", 1) if mesh is not None else 1,
+            "pp_size": getattr(mesh, "pp_size", 1) if mesh is not None else 1,
+            "ep_size": getattr(mesh, "ep_size", 1) if mesh is not None else 1,
+            "sequence_parallel": bool(
+                getattr(mesh, "sequence_parallel", False)
+            ),
+            "loss_parallel": bool(getattr(mesh, "loss_parallel", False)),
+        },
+    })
+    session.record_plan_application({
+        "resolved_injections": [],
+        "source_shard_info": {},
+        "validate_mode": False,
+    })
 
 
 def _publish_session(

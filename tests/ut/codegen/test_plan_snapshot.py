@@ -113,6 +113,49 @@ def test_codegen_observation_does_not_apply_sharding(monkeypatch):
     assert snapshot.to_dict()["plan_application"]["source_shard_info"] == {}
 
 
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_pure_data_parallel_with_replacement_is_derived_without_planner_call():
+    """An observed replacement remains source-visible without model sharding."""
+    session = CodegenBuildSession()
+    session.record_source({"model_type": "toy"})
+    session.record_replacements(
+        declarations=[{
+            "rule_id": "replace:0",
+            "match": ["block"],
+            "replacement_target": "tests.replace_block",
+            "exact_type": True,
+        }],
+        applications=[{
+            "rule_id": "replace:0",
+            "module_fqns": ["block"],
+            "primary_fqn": "block",
+            "source_type": "tests:SourceBlock",
+            "replacement_type": "tests:ReplacementBlock",
+            "weight_transforms": [],
+        }],
+    )
+
+    class Planner:
+        """Reject planner execution for a replacement-only snapshot."""
+
+        def plan(self, *_args, **_kwargs):
+            pytest.fail("replacement-only snapshot invoked the planner")
+
+    model_build_overlay._observe_plan(
+        nn.Module(),
+        _mesh(tp_size=1),
+        Planner(),
+        True,
+        session,
+    )
+    snapshot = session.finish()
+
+    assert snapshot.status is CodegenStatus.DERIVED
+    assert snapshot.to_dict()["plan"]["param_plan"] == {}
+    assert snapshot.to_dict()["plan_application"]["resolved_injections"] == []
+
+
 @pytest.mark.parametrize(
     ("planner", "mesh", "is_hf_model", "reason"),
     (

@@ -14,12 +14,16 @@
 # ============================================================================
 """Snapshot-driven manager must not rebuild native planning decisions."""
 
+from pathlib import Path
+
 import pytest
 
 from hyper_parallel.codegen import manager
 from hyper_parallel.codegen.artifact import ArtifactLayout
 from hyper_parallel.codegen.check import verify_snapshot_contract, verify_snapshot_drift
+from hyper_parallel.codegen.check.preflight import verify_param_plan
 from hyper_parallel.codegen.emit import replacement
+from hyper_parallel.codegen.meta import meta_from_dict, meta_to_dict
 from hyper_parallel.codegen.session import CodegenBuildSession
 from hyper_parallel.distributed._builder import planner
 
@@ -325,9 +329,35 @@ def test_snapshot_manager_maps_observed_replacement_without_rematching(
     }]
 
 
+def test_replacement_only_snapshot_meta_is_valid(tmp_path):
+    """A replacement application is executable evidence without parameter sharding."""
+    source = tmp_path / "modeling_toy.py"
+    source.write_text("class ToyModel:\n    pass\n", encoding="utf-8")
+    snapshot = _snapshot(source, with_replacement=True)
+    payload = snapshot.to_dict()
+    payload["plan"]["param_plan"] = {}
+    payload["plan"]["boundary_classes"] = {}
+    payload["plan"]["mesh_dim_names"] = []
+    payload["plan_application"]["applied_boundaries"] = []
+    replacement_only = type(snapshot).from_dict(payload)
+    layout = ArtifactLayout.build_default(str(tmp_path / "generated"), "ToyModel")
+
+    meta = manager._build_meta_from_snapshot(  # pylint: disable=protected-access
+        replacement_only,
+        layout,
+        manager.signature_from_snapshot(replacement_only),
+    )
+
+    loaded = meta_from_dict(meta_to_dict(meta))
+    assert loaded.snapshot_status == "derived"
+    verify_param_plan(loaded, model=None)
+
+
 def test_snapshot_manager_emits_not_required_audit_bundle(monkeypatch, tmp_path):
+    source = tmp_path / "modeling.py"
+    source.write_text("class ToyModel:\n    pass\n", encoding="utf-8")
     session = CodegenBuildSession()
-    session.record_source({"file_path": str(tmp_path / "modeling.py")})
+    session.record_source({"file_path": str(source)})
     session.record_replacements(
         declarations=[{
             "rule_id": "replace:0",
@@ -366,12 +396,18 @@ def test_snapshot_manager_emits_not_required_audit_bundle(monkeypatch, tmp_path)
         "applications": [],
         "unmatched": [],
     }
-    assert set(meta.outputs) == {"init"}
+    assert set(meta.outputs) == {"init", "modeling", "diff"}
     verify_snapshot_contract(meta)
     assert sorted(path.name for path in tmp_path.joinpath("artifact").iterdir()) == [
         "__init__.py",
         "codegen_meta.json",
+        "modeling_model_gen_npu.py",
+        "modeling_model_gen_npu.py.diff",
     ]
+    assert Path(layout.modeling_path).read_text(encoding="utf-8") == "class ToyModel:\n    pass\n"
+    assert Path(layout.diff_path).read_text(encoding="utf-8") == (
+        "# No codegen patches were required for this configuration.\n"
+    )
 
 
 def test_snapshot_contract_rejects_legacy_and_accepts_complete_snapshot_meta():

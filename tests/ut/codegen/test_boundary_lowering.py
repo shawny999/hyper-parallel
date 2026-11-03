@@ -40,15 +40,24 @@ import pytest
 from hyper_parallel.codegen.emit.modeling import _verify_recorded_patch_materialization
 from hyper_parallel.codegen.emit.parallel import lower_forward_boundaries
 from hyper_parallel.codegen.emit.recorded import materialize_recorded_forwards
+from hyper_parallel.codegen.inline.framework_spec import _cp_strategy_spec
 from hyper_parallel.codegen.inline.ir import (
+    ConstructorReplacePatch,
     ForwardExtractPatch,
     ImportPatch,
     InlinePatchSet,
+    InlineRule,
 )
 from hyper_parallel.codegen.inline.patch_engine import apply_patch_set
-from hyper_parallel.codegen.inline.pipeline import _materialize_imported_forward_hosts
+from hyper_parallel.codegen.inline.pipeline import (
+    _add_recorded_forward_host_imports,
+    _materialize_imported_forward_hosts,
+    _observed_boundary_classes,
+)
 from hyper_parallel.codegen.inline.recognition import inner_wrapper_target
+from hyper_parallel.codegen.inline.strategy_pass import build_strategy_patches
 from hyper_parallel.codegen.inline.templates import cp_dispatch_shell_body
+from hyper_parallel.codegen.inline.yaml_rules import collect_inline_rules
 from tests.common.mark_utils import arg_mark
 
 SOURCE_TEXT = '''\
@@ -99,6 +108,58 @@ def test_delegating_cp_wrapper_exposes_source_visible_helper(factory, helper):
 
     assert target is not None
     assert target.helper_name == helper
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_closure_cp_wrapper_exposes_source_visible_forward():
+    """Closure state published by a rewrite request lowers into its host."""
+    factory = (
+        "hyper_parallel.models.deepseek_v41.adapter.distributed."
+        "shared_attention_context_parallel."
+        "deepseek_v41_shared_attention_parallel_wrapper"
+    )
+
+    target = inner_wrapper_target(factory)
+
+    assert target is not None
+    assert target.helper_name is None
+    assert target.inline_body is not None
+    assert "if self.cp_enable:" in target.inline_body
+    assert "self._hyper_v41_shared_attention_cp_context" in target.inline_body
+    assert "self._hyper_v41_shared_attention_tp_context" in target.inline_body
+    assert "super().forward(*args, **call_kwargs)" in target.inline_body
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_closure_cp_wrapper_materializes_imported_replacement_host(monkeypatch):
+    """A closure wrapper and an imported replacement compose end to end."""
+    wrapper = (
+        "hyper_parallel.models.deepseek_v41.adapter.distributed."
+        "shared_attention_context_parallel."
+        "deepseek_v41_shared_attention_parallel_wrapper"
+    )
+    monkeypatch.setattr(
+        "hyper_parallel.codegen.inline.strategy_pass.strategy_spec",
+        lambda *_args, **_kwargs: _cp_strategy_spec(wrapper),
+    )
+    patches = build_strategy_patches(
+        (InlineRule(match=("model.layers.0.self_attn",), inner_wrapper_target=wrapper),),
+        boundary_classes={"model.layers.0.self_attn": "SharedCompressedDSAAttention"},
+    )
+    patches.imports.append(
+        ImportPatch("demo.components", ("SharedCompressedDSAAttention",))
+    )
+
+    _materialize_imported_forward_hosts(SOURCE_TEXT, patches)
+    rendered = apply_patch_set(SOURCE_TEXT, patches)
+
+    ast.parse(rendered)
+    assert "class SharedCompressedDSAAttention(_SharedCompressedDSAAttentionBase):" in rendered
+    assert "if self.cp_enable:" in rendered
+    assert "self._hyper_v41_shared_attention_cp_context" in rendered
+    assert "return super().forward(*args, **call_kwargs)" in rendered
 
 VARIADIC_SOURCE_TEXT = '''\
 import torch
@@ -659,6 +720,86 @@ def test_imported_cp_host_is_rendered_as_same_name_class():
 
 @arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
           card_mark="onecard", essential_mark="unessential")
+def test_observed_replacement_supplies_missing_cp_host_import():
+    """A native replacement record supplies an imported CP host generically."""
+    replacement_type = type("ObservedAttention", (), {})
+    replacement_type.__module__ = "demo.components"
+    patches = InlinePatchSet(
+        forward_extracts=[
+            ForwardExtractPatch(
+                class_name="ObservedAttention",
+                method_name="forward",
+                body=cp_dispatch_shell_body("observed_cp_forward"),
+            )
+        ]
+    )
+    patch_plan = SimpleNamespace(
+        module_replacements=(
+            SimpleNamespace(replacement_type=replacement_type),
+        )
+    )
+
+    _add_recorded_forward_host_imports(SOURCE_TEXT, patches, patch_plan)
+    _materialize_imported_forward_hosts(SOURCE_TEXT, patches)
+    rendered = apply_patch_set(SOURCE_TEXT, patches)
+
+    assert "from demo.components import ObservedAttention as _ObservedAttentionBase" in rendered
+    assert "class ObservedAttention(_ObservedAttentionBase):" in rendered
+    assert "return observed_cp_forward(self, *args, **kwargs)" in rendered
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_observed_inner_wrapper_rebinds_boundary_to_replacement_type():
+    """Strategy ownership follows the target selected by the native wrapper."""
+    replacement_type = type("ObservedAttention", (), {})
+    patch_plan = SimpleNamespace(
+        inner_wrappers=(
+            SimpleNamespace(
+                module_fqn="model.layers.0.self_attn",
+                target_fqn="self",
+                target_type=replacement_type,
+            ),
+        )
+    )
+    meta = SimpleNamespace(
+        boundary_classes={
+            "model.layers.0.self_attn": "OriginalAttention",
+        }
+    )
+
+    classes = _observed_boundary_classes(meta, patch_plan)
+
+    assert classes == {
+        "model.layers.0.self_attn": "ObservedAttention",
+    }
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_model_adapter_replacement_keeps_declared_factory_contract():
+    """Observed types do not erase a model-owned factory's interface facts."""
+    meta = SimpleNamespace(
+        module_overrides=[{
+            "factory": "hyper_parallel.components.modules.GQAAttention",
+            "replacement_target": (
+                "hyper_parallel.models.qwen3_moe.adapter.conversion."
+                "module_replacement.replace_qwen3_moe_flash_attention"
+            ),
+            "module_type": "demo.OriginalAttention",
+            "fqns": ["model.layers.0.self_attn"],
+        }],
+        injections=[],
+    )
+
+    rules = collect_inline_rules(meta)
+
+    assert len(rules) == 1
+    assert rules[0].replace_target == meta.module_overrides[0]["replacement_target"]
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
 def test_imported_cp_host_and_boundary_share_one_forward_impl():
     """CP dispatch and boundary lowering compose into one implementation."""
     patches = InlinePatchSet(
@@ -702,6 +843,42 @@ def test_imported_cp_host_and_boundary_share_one_forward_impl():
     assert "return mla_cp_forward(self, *args, **kwargs)" in rendered
     assert "return super().forward(*args, **kwargs)" in rendered
     assert "return self._forward_impl(*args, **kwargs)" not in rendered
+
+
+@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
+          card_mark="onecard", essential_mark="unessential")
+def test_imported_replacement_owner_is_lowered_after_root_construction():
+    """An observed wrapper needs no constructor call in the copied source."""
+    source = """\
+class Root(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.model = ImportedDecoder(config)
+"""
+    patches = InlinePatchSet(
+        imports=[ImportPatch("demo.replacements", ("WrappedExperts",))],
+        constructor_replaces=[
+            ConstructorReplacePatch(
+                old_ctor="ImportedExperts",
+                new_ctor="WrappedExperts",
+                mode="wrap_source",
+                keyword_args=("module_fqn=''", "context={}"),
+                scope_attrs=("experts",),
+                scope_fqns=(
+                    "model.layers.0.mlp.experts",
+                    "model.layers.1.mlp.experts",
+                ),
+            )
+        ],
+    )
+
+    rendered = apply_patch_set(source, patches)
+
+    ast.parse(rendered)
+    assert "self.model = ImportedDecoder(config)" in rendered
+    assert "for _hp_fqn in ('model.layers.0.mlp.experts', 'model.layers.1.mlp.experts')" in rendered
+    assert "WrappedExperts(" in rendered
+    assert "module=_hp_source, module_fqn=_hp_fqn, context={}" in rendered
 
 
 @arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",

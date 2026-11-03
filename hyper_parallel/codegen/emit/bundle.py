@@ -49,6 +49,8 @@ from hyper_parallel.models.registry import family_dir_for_model_type
 
 logger = logging.getLogger(__name__)
 
+_NO_PATCH_DIFF = "# No codegen patches were required for this configuration.\n"
+
 
 def emit_bundle(
     layout: ArtifactLayout,
@@ -73,7 +75,12 @@ def emit_bundle(
             raise ValueError("bundle meta and snapshot status do not match")
     if getattr(meta, "snapshot_status", None) == "not_required":
         logger.info("codegen: rendered audit-only bundle %s", layout.artifact_dir)
-        return {"__init__.py": _strip_trailing_whitespace(emit_init_file(layout))}
+        modeling_name = os.path.basename(layout.modeling_path)
+        return {
+            modeling_name: copy_original_modeling(meta.source),
+            os.path.basename(layout.diff_path): _NO_PATCH_DIFF,
+            "__init__.py": _strip_trailing_whitespace(emit_init_file(layout)),
+        }
     if patch_plan is None:
         from hyper_parallel.codegen.emit.patches import emission_patches_from_meta
 

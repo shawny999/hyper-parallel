@@ -401,6 +401,12 @@ def verify_param_plan(meta: Any, model: Any) -> None:
     """
     param_plan = getattr(meta, "param_plan", None) or {}
     if not param_plan:
+        replacement_applications = (
+            (getattr(meta, "snapshot_replacements", None) or {}).get("applications")
+            or []
+        )
+        if replacement_applications:
+            return
         raise RuntimeError(
             "codegen preflight: param plan is empty — generation did not "
             "freeze a sharding plan (derivation failed or was skipped); "

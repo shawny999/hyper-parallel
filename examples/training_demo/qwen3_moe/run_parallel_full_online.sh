@@ -20,7 +20,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROJECT_ROOT=$(cd "${SCRIPT_DIR}/../../.." && pwd)
 OUTPUT_DIR="${PROJECT_ROOT}/output/training_demo"
 DATA_ROOT="${OUTPUT_DIR}/data"
-CONFIG_FILE="${PROJECT_ROOT}/hyper_parallel/models/qwen3_moe/recipes/train.yaml"
+CONFIG_FILE="${PROJECT_ROOT}/examples/training_demo/qwen3_moe/train_parallel_online.yaml"
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 /path/to/Qwen3-30B-A3B [trainer overrides...]" >&2
@@ -52,8 +52,7 @@ torchrun \
     --nproc_per_node=8 \
     --module examples.training_demo.train_text \
     "${CONFIG_FILE}" \
-    --model.pretrained_model_name_or_path="${MODEL_PATH}" \
-    --model.local_files_only=true \
+    --model.config_path="${MODEL_PATH}" \
     --dataset.model_assets.tokenizer.pretrained_model_name_or_path="${MODEL_PATH}" \
     --dataset.model_assets.tokenizer.local_files_only=true \
     --dataset.data_path="${DATA_ROOT}/parallel_online.jsonl" \

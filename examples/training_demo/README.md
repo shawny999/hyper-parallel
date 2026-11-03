@@ -81,7 +81,7 @@ Logs and generated data are stored under `output/training_demo`.
 
 Both full-model launchers load all 48 layers and the complete Hugging Face
 checkpoint through `HyperAutoModelForCausalLM.from_pretrained`. Online uses the
-packaged `hyper_parallel/models/qwen3_moe/recipes/train.yaml`;
+packaged `examples/training_demo/qwen3_moe/train_parallel_online.yaml`;
 Offline uses `examples/training_demo/qwen3_moe/train_parallel_full_offline.yaml` because
 the two data paths instantiate different Dataset, DataLoader, and collate
 targets. Ordinary values can be overridden on the command line, but the typed

@@ -15,7 +15,7 @@
 """HyperParallel AutoModels ``train.yaml`` parser (Hyper V2).
 
 Parses the HyperParallel YAML configuration format
-(``hyper_parallel/models/qwen3_moe/recipes/train.yaml``) and
+(``examples/training_demo/qwen3_moe/train_parallel_online.yaml``) and
 populates a :class:`CostModelConfig` for memory estimation.
 
 Model hyperparameters are resolved with the same Transformers

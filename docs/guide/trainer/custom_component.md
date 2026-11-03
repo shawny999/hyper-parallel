@@ -26,7 +26,7 @@ training:
 
 ```bash
 torchrun --standalone --nproc_per_node=8 \
-  scripts/train_lm.py hyper_parallel/models/qwen3_moe/recipes/train.yaml \
+  scripts/train_lm.py examples/training_demo/qwen3_moe/train_parallel_online.yaml \
   --training.train_iters=10
 ```
 
