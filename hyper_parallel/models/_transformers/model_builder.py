@@ -151,7 +151,6 @@ def _init_model(
     torch_dtype,
     is_hf_model: bool,
     *model_args,
-    backend=None,
     **kwargs,
 ) -> tuple[bool, nn.Module]:
     """Initialize model — dispatching to custom or HF path.
@@ -166,7 +165,6 @@ def _init_model(
         torch_dtype: "auto" / "bfloat16" / etc.
         is_hf_model: True = HF native, False = custom implementation.
         *model_args: Extra positional args for model constructor.
-        backend: Reserved native backend selector.
         **kwargs: Extra keyword args.
 
     Returns:
@@ -174,8 +172,6 @@ def _init_model(
     """
     architectures = getattr(hf_config, "architectures", []) or []
     arch_name = architectures[0] if architectures else ""
-
-    del backend
 
     # ── Path A: HF native ──
     if is_hf_model:

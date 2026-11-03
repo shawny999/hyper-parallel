@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Codegen manager: decide, generate (rank0), reuse, and preflight.
+"""Codegen manager: generate, reuse, and preflight single-process bundles.
 
-The manager is the only entry point the trainer / CLI talks to.  It does NOT
-do AST patching or source emitting itself — that is delegated to the
-``emit`` layer — it decides whether an artifact is stale, who generates it,
-and whether it passes preflight before training starts.
+The manager is the only entry point the trainer / CLI talks to. It does not
+perform AST patching or source emitting itself; those operations belong to
+the ``emit`` layer. It decides whether an artifact is stale, publishes it in
+the current process, and runs preflight checks before it can be consumed.
 """
 
 from __future__ import annotations
@@ -28,16 +28,11 @@ import logging
 import os
 from typing import Any, Optional
 
-import torch.distributed as dist
-
 from hyper_parallel.codegen.artifact import (
     ArtifactLayout,
-    artifact_failure_path,
     artifact_generation_lock,
-    clear_artifact_failure,
     clean_temp_artifacts,
     ensure_artifact_dir,
-    publish_artifact_failure,
     resolve_default_artifact_layout,
     resolve_model_artifact_layout,
     resolve_artifact_layout,
@@ -71,10 +66,12 @@ def ensure_codegen_artifact_from_snapshot(
     *,
     timeout_s: float = 600.0,
 ) -> ArtifactLayout:
-    """Generate or reuse a bundle using only frozen native-build data.
+    """Generate or reuse a bundle in the current single process.
 
     This entry must remain independent of config projection, meta-model
     construction, offline meshes, replacement matching, and planner calls.
+    Distributed launchers must use a dedicated sidecar instead of invoking
+    this function independently on every training rank.
     """
     if not isinstance(snapshot, CodegenSnapshot):
         raise TypeError("snapshot must be a CodegenSnapshot")
@@ -105,53 +102,31 @@ def ensure_codegen_artifact_from_snapshot(
             model_name=str(model_name) if model_name else None,
         )
     ensure_artifact_dir(layout)
-    is_rank0 = _is_rank0()
-    if is_rank0:
-        clean_temp_artifacts(layout)
+    clean_temp_artifacts(layout)
 
     signature = signature_from_snapshot(snapshot)
-    validate_snapshot_signature(signature)
     existing = load_codegen_meta(layout.meta_path)
     if existing is not None and not should_regenerate(existing, signature):
-        if is_rank0:
-            logger.info(
-                "codegen: reuse snapshot artifact %s (signature %s)",
-                layout.artifact_dir,
-                signature,
-            )
-        barrier_after_artifact()
+        logger.info(
+            "codegen: reuse snapshot artifact %s (signature %s)",
+            layout.artifact_dir,
+            signature,
+        )
         return layout
-    if not is_rank0:
-        try:
-            wait_for_rank0_artifact(layout, signature, timeout_s=timeout_s)
-            return layout
-        finally:
-            barrier_after_artifact()
 
-    try:
-        with artifact_generation_lock(layout, timeout_s=timeout_s):
-            existing = load_codegen_meta(layout.meta_path)
-            if existing is not None and not should_regenerate(existing, signature):
-                return layout
-            logger.info(
-                "codegen: generating snapshot artifact %s (signature %s)",
-                layout.artifact_dir,
-                signature,
-            )
-            meta = _build_meta_from_snapshot(snapshot, layout, signature)
-            files = emit_bundle(
-                layout,
-                meta,
-                snapshot=snapshot,
-            )
-            write_bundle_atomic(layout, files, meta)
-        return layout
-    except Exception as exc:
-        publish_artifact_failure(layout, signature, str(exc) or type(exc).__name__)
-        raise
-    finally:
-        barrier_after_artifact()
-        clear_artifact_failure(layout, signature)
+    with artifact_generation_lock(layout, timeout_s=timeout_s):
+        existing = load_codegen_meta(layout.meta_path)
+        if existing is not None and not should_regenerate(existing, signature):
+            return layout
+        logger.info(
+            "codegen: generating snapshot artifact %s (signature %s)",
+            layout.artifact_dir,
+            signature,
+        )
+        meta = _build_meta_from_snapshot(snapshot, layout, signature)
+        files = emit_bundle(layout, meta, snapshot=snapshot)
+        write_bundle_atomic(layout, files, meta)
+    return layout
 
 
 def _build_meta_from_snapshot(
@@ -515,7 +490,6 @@ def preflight_integrity_check(
             "codegen preflight: legacy artifacts are no longer supported; "
             "regenerate with 'python -m hyper_parallel.codegen generate'"
         )
-    validate_snapshot_signature(meta.signature)
     verify_output_hashes(meta, layout)
     if meta.snapshot_status == CodegenStatus.NOT_REQUIRED.value:
         return
@@ -531,116 +505,6 @@ def should_regenerate(meta: CodegenMeta, signature: str) -> bool:
         meta.signature != signature
         or getattr(meta, "codegen_version", None) != CODEGEN_VERSION
     )
-
-
-def wait_for_rank0_artifact(
-    layout: ArtifactLayout,
-    current_signature: str,
-    *,
-    timeout_s: float = 600.0,
-) -> None:
-    """Non-rank0: poll until rank0 has produced a fully-written artifact.
-
-    ``current_signature`` is this rank's own computed signature.  The wait is
-    signature-aware: a parseable meta is only accepted when its signature
-    matches, so a stale bundle left on disk from a previous regeneration is
-    never mistaken for "rank0 is done" — the poll continues until the new
-    bundle's meta (written last inside the staging dir, then swapped in) lands.
-    The meta file is written last, so a matching signature also means the
-    modeling/diff/init files are already in place.
-    """
-    import time
-
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        failure_path = artifact_failure_path(layout, current_signature)
-        if os.path.isfile(failure_path):
-            with open(failure_path, "r", encoding="utf-8") as handle:
-                reason = handle.read().strip()
-            raise RuntimeError(
-                "codegen: rank0 artifact generation failed"
-                + (f": {reason}" if reason else "")
-            )
-        meta = load_codegen_meta(layout.meta_path)
-        if meta is not None and not should_regenerate(meta, current_signature):
-            return
-        time.sleep(0.5)
-    raise TimeoutError(
-        f"codegen: timed out waiting for rank0 artifact at {layout.artifact_dir}"
-    )
-
-
-def barrier_after_artifact() -> None:
-    """Rejoin all ranks after the artifact is ready.
-
-    Every rank must call it exactly once on the way out of
-    ``ensure_codegen_artifact_from_snapshot``, on every path: rank0 after writing the
-    bundle, each other rank right after ``wait_for_rank0_artifact`` returns,
-    and every rank that takes the reuse path (the reuse decision is a per-rank
-    disk read, so ranks can disagree while rank0 swaps in a fresh bundle — a
-    rank that skips the barrier deadlocks its peers inside theirs).  It is the
-    collective that lets all ranks leave the codegen entry together before
-    training starts.  The half-written-bundle race it was written to guard
-    against is already closed by ``wait_for_rank0_artifact`` (signature aware,
-    meta written last); the barrier is purely a rendezvous point, so it must
-    be reached by every rank.
-
-    Uses ``torch.distributed`` directly (the process group was initialized in
-    ``trainer._setup`` before the codegen manager runs); a no-op without a
-    live process group.
-    """
-    if dist.is_available() and dist.is_initialized():
-        dist.barrier()
-
-
-def validate_snapshot_signature(signature: str) -> None:
-    """Fail every rank together when snapshot artifact identities diverge.
-
-    File polling cannot coordinate rank-local signatures: each non-owner would
-    otherwise wait for an artifact rank 0 can never publish under its identity.
-    The collective runs only for snapshot sidecar generation and completes
-    before any rank enters artifact reuse, generation, or polling.
-
-    Args:
-        signature: This rank's canonical snapshot signature.
-
-    Raises:
-        RuntimeError: If initialized ranks computed different signatures.
-    """
-    if not dist.is_available() or not dist.is_initialized():
-        return
-    signatures: list[Optional[str]] = [None] * dist.get_world_size()
-    dist.all_gather_object(signatures, signature)
-    if any(item != signatures[0] for item in signatures[1:]):
-        raise RuntimeError(
-            "codegen: snapshot signature mismatch across ranks: "
-            + ", ".join(
-                f"rank{rank}={item}" for rank, item in enumerate(signatures)
-            )
-        )
-
-
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
-
-def _is_rank0() -> bool:
-    """True when this process is global rank 0 (or is a single process).
-
-    Training config is parsed before the process group is initialized, so a
-    torchrun worker must use its ``RANK`` environment value. Other callers use
-    the initialized process group when available and otherwise act as rank 0.
-    """
-    rank = os.environ.get("RANK")
-    if rank is not None:
-        try:
-            return int(rank) == 0
-        except ValueError as exc:
-            raise ValueError(f"codegen: invalid RANK value {rank!r}") from exc
-    if dist.is_available() and dist.is_initialized():
-        return dist.get_rank() == 0
-    return True
 
 
 def _model_name(config: Any, hf_config: Any = None) -> Optional[str]:
@@ -858,9 +722,7 @@ def _hf_config_kwargs(model: Any) -> dict[str, Any]:
 
 __all__ = [
     "CODEGEN_VERSION",
-    "barrier_after_artifact",
     "ensure_codegen_artifact_from_snapshot",
     "preflight_integrity_check",
     "should_regenerate",
-    "wait_for_rank0_artifact",
 ]

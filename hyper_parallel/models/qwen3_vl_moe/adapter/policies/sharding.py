@@ -16,13 +16,11 @@
 
 from typing import Any
 
+from hyper_parallel.distributed.tensor_parallel.param_role import ParamRole
+
 
 def build_parameter_sharding_rules() -> list[tuple[Any, Any]]:
     """Replicate the separately owned vision tower across the TP domain."""
-    from hyper_parallel.distributed.tensor_parallel.param_role import (  # pylint: disable=C0415
-        ParamRole,
-    )
-
     return [("model.visual.", ParamRole.REPLICATED)]
 
 

@@ -1,12 +1,20 @@
 # Copyright 2026 Huawei Technologies Co., Ltd
-# Licensed under the Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # ============================================================================
 """Signature and file-hash helpers for codegen artifacts.
 
-``signature_from_spec`` is the single source of truth for artifact reuse:
-same canonical spec  => same signature => artifact hit.  Any change to the
-source modeling file, parallel topology, override set, or checkpoint
-transform flags must change the signature.
+Snapshot signatures are the single source of truth for artifact reuse.
 """
 from __future__ import annotations
 
@@ -37,15 +45,6 @@ def canonical_json(data: object) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
-def signature_from_spec(spec: object, *, prefix: int = 12) -> str:
-    """Compute the artifact signature from a canonical spec, first ``prefix`` hex chars.
-
-    ``spec`` may be any JSON-serializable object (typically a
-    :class:`CodegenSpec` ``to_dict()`` result or its canonical projection).
-    """
-    return sha256_text(canonical_json(spec))[:prefix]
-
-
 def canonical_snapshot_payload(snapshot: Any) -> str:
     """Serialize the stable identity projection of a build snapshot."""
     signature_payload = getattr(snapshot, "signature_payload", None)
@@ -71,6 +70,5 @@ __all__ = [
     "file_line_count",
     "sha256_file",
     "sha256_text",
-    "signature_from_spec",
     "signature_from_snapshot",
 ]

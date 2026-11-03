@@ -402,16 +402,4 @@ def _bind_module_impl(source_text: str, wrapper_name: str, impl_name: str) -> st
     return apply_edits(source_text, edits)
 
 
-def _fqn_sort_key(fqn: str) -> tuple[tuple[int, int, str], ...]:
-    """Natural sort key for plan FQNs — layer indices order by value.
-
-    A plain lexical sort renders ``layers.10`` before ``layers.2``; the binder
-    stays reviewable only when recorded layer paths appear in numeric order.
-    """
-    return tuple(
-        (0, int(segment), "") if segment.isdigit() else (1, 0, segment)
-        for segment in fqn.split(".")
-    )
-
-
 __all__ = ["materialize_recorded_forwards"]

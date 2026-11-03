@@ -91,9 +91,7 @@ def resolve_model_source(
     4. Local checkpoint ``config.json`` -> remote code (``SimpleNamespace``
        mirrors ``AutoConfig`` attribute access).
 
-    Returns ``None`` when nothing resolved, so the caller decides whether to
-    fail (codegen ``gen`` backend must not run without a source) or degrade
-    (``hf`` backend records the unresolved ``SourceSpec`` projection).
+    Returns ``None`` when no readable modeling source can be resolved.
     """
     if hf_config is not None:
         return resolve_hf_source(config, hf_config)
@@ -153,10 +151,10 @@ def resolve_hf_source(config: Any, hf_config: Any) -> ResolvedSource:
             "config's module — remote code is the source HF would load"
         )
 
-    # 2. Custom-registered model — what hyper_parallel's CUSTOM/GEN backends
-    #    load for a registered architecture. The registry entry is
+    # 2. Custom-registered model — what HyperParallel loads for a registered
+    #    architecture. The registry entry is
     #    authoritative over an installed transformers module of the same
-    #    model_type: backend resolution prefers the registered class.
+    #    model_type: model resolution prefers the registered class.
     custom_module = _custom_registered_module(hf_config)
     if custom_module is not None:
         custom_path = import_module_file(custom_module)

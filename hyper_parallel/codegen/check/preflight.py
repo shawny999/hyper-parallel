@@ -212,9 +212,8 @@ def verify_boundary_forms(meta: Any, layout: Any) -> None:
 
     - ``identity``: the original forward is untouched (no extracted
       ``_forward_impl``, no form marker);
-    - ``tp_collective``: the class carries a form marker (``TP_FORM_MARKER``
-      from the static template, or ``TOGGLE_FORM_MARKER`` from the opt-in
-      switch template) and the extracted ``_forward_impl``, and the rewritten
+    - ``tp_collective``: the class carries the static ``TP_FORM_MARKER`` and
+      the extracted ``_forward_impl``, and the rewritten
       forward references only the static template's own attributes
       (``self._hp_tp`` / ``self._forward_impl``) — plus the D-22 exit call
       ``self._hp_deferred_bias`` when the class's frozen entry declares
@@ -238,7 +237,6 @@ def verify_boundary_forms(meta: Any, layout: Any) -> None:
 
     from hyper_parallel.codegen.astkit.index import build_source_index
     from hyper_parallel.codegen.emit.parallel import (
-        TOGGLE_FORM_MARKER,
         TP_FORM_ATTRIBUTE,
         TP_FORM_MARKER,
         iter_emitted_forms,
@@ -269,12 +267,6 @@ def verify_boundary_forms(meta: Any, layout: Any) -> None:
         has_impl = info is not None and "_forward_impl" in info.methods
         class_body = source_text[info.class_offset:info.end_offset] if info else ""
         has_marker = f'{TP_FORM_ATTRIBUTE} = "{TP_FORM_MARKER}"' in class_body
-        # The opt-in toggle template marks its classes with TOGGLE_FORM_MARKER:
-        # a boundary the classifier calls tp_collective carries either marker
-        # depending on which generation mode emitted it.
-        has_toggle_marker = (
-            f'{TP_FORM_ATTRIBUTE} = "{TOGGLE_FORM_MARKER}"' in class_body
-        )
         has_inline_marker = "_hp_inline_boundary = True" in class_body
         body = source_text[func.body_start:func.body_end]
         # Every generated communication path — inlined or lowered — reads the
@@ -304,7 +296,7 @@ def verify_boundary_forms(meta: Any, layout: Any) -> None:
             )
         )
         if has_inline_marker or (
-            has_inline_channel and not (has_impl or has_marker or has_toggle_marker)
+            has_inline_channel and not (has_impl or has_marker)
         ):
             # A fully inlined component body (the inline-marker shape): it
             # keeps no extracted ``_forward_impl`` and no form marker, and
@@ -338,7 +330,7 @@ def verify_boundary_forms(meta: Any, layout: Any) -> None:
                 "regenerate the artifact"
             )
         if emitted == FORM_TP_COLLECTIVE:
-            if not (has_marker or has_toggle_marker):
+            if not has_marker:
                 raise RuntimeError(
                     f"codegen preflight: class {class_name} should carry the "
                     f"{TP_FORM_MARKER} marker but does not; regenerate the "

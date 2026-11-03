@@ -40,7 +40,6 @@ def _snapshot(source_path, *, with_replacement=False):
         "sha256": "source-sha",
         "line_count": 1,
         "is_hf_model": True,
-        "backend": "hf",
     })
     if with_replacement:
         session.record_replacements(
@@ -138,11 +137,9 @@ def test_snapshot_manager_uses_no_legacy_derivation(monkeypatch, tmp_path):
     assert not hasattr(manager, "_prepare_codegen_build")
     monkeypatch.setattr(planner.ShardingPlanner, "plan", forbidden)
     assert not hasattr(replacement, "compile_overrides_for_meta")
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
     monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: None)
     monkeypatch.setattr(manager, "clean_temp_artifacts", lambda _layout: None)
     monkeypatch.setattr(manager, "ensure_artifact_dir", lambda _layout: None)
-    monkeypatch.setattr(manager, "barrier_after_artifact", lambda: None)
 
     def emit(layout, meta, **kwargs):
         captured["layout"] = layout
@@ -184,7 +181,6 @@ def test_preflight_uses_model_name_recorded_by_generated_bundle(monkeypatch, tmp
     captured = {}
 
     monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: meta)
-    monkeypatch.setattr(manager, "validate_snapshot_signature", lambda _signature: None)
     monkeypatch.setattr(
         "hyper_parallel.codegen.check.preflight.verify_meta_required_fields",
         lambda _meta: None,
@@ -233,17 +229,9 @@ def test_snapshot_manager_reuses_matching_signature(monkeypatch, tmp_path):
         (),
         {"signature": signature, "codegen_version": manager.CODEGEN_VERSION},
     )()
-    calls = {"barrier": 0}
-
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
     monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: existing)
     monkeypatch.setattr(manager, "clean_temp_artifacts", lambda _layout: None)
     monkeypatch.setattr(manager, "ensure_artifact_dir", lambda _layout: None)
-    monkeypatch.setattr(
-        manager,
-        "barrier_after_artifact",
-        lambda: calls.update(barrier=calls["barrier"] + 1),
-    )
     monkeypatch.setattr(
         manager,
         "emit_bundle",
@@ -257,36 +245,6 @@ def test_snapshot_manager_reuses_matching_signature(monkeypatch, tmp_path):
         str(tmp_path / "artifact"),
     )
 
-    assert calls == {"barrier": 1}
-
-
-def test_snapshot_signature_validation_rejects_rank_mismatch(monkeypatch):
-    monkeypatch.setattr(manager.dist, "is_available", lambda: True)
-    monkeypatch.setattr(manager.dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(manager.dist, "get_world_size", lambda: 3)
-
-    def gather(signatures, _signature):
-        signatures[:] = ["rank-zero", "rank-one", "rank-zero"]
-
-    monkeypatch.setattr(manager.dist, "all_gather_object", gather)
-
-    with pytest.raises(RuntimeError, match="snapshot signature mismatch across ranks"):
-        manager.validate_snapshot_signature("rank-zero")
-
-
-def test_artifact_barrier_propagates_collective_failure(monkeypatch):
-    monkeypatch.setattr(manager.dist, "is_available", lambda: True)
-    monkeypatch.setattr(manager.dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(
-        manager.dist,
-        "barrier",
-        lambda: (_ for _ in ()).throw(RuntimeError("injected barrier failure")),
-    )
-
-    with pytest.raises(RuntimeError, match="injected barrier failure"):
-        manager.barrier_after_artifact()
-
-
 def test_snapshot_manager_maps_observed_replacement_without_rematching(
     monkeypatch,
     tmp_path,
@@ -295,12 +253,9 @@ def test_snapshot_manager_maps_observed_replacement_without_rematching(
     source.write_text("class ToyModel:\n    pass\n", encoding="utf-8")
     snapshot = _snapshot(source, with_replacement=True)
     captured = {}
-
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
     monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: None)
     monkeypatch.setattr(manager, "clean_temp_artifacts", lambda _layout: None)
     monkeypatch.setattr(manager, "ensure_artifact_dir", lambda _layout: None)
-    monkeypatch.setattr(manager, "barrier_after_artifact", lambda: None)
     monkeypatch.setattr(
         manager,
         "emit_bundle",
@@ -369,9 +324,6 @@ def test_snapshot_manager_emits_not_required_audit_bundle(monkeypatch, tmp_path)
         }],
     )
     session.mark_not_required("pure_data_parallel")
-
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
-    monkeypatch.setattr(manager, "barrier_after_artifact", lambda: None)
 
     layout = manager.ensure_codegen_artifact_from_snapshot(
         session.finish(),
@@ -634,7 +586,6 @@ def test_snapshot_manager_normalizes_deepseek_v4_family(monkeypatch, tmp_path):
     monkeypatch.setattr(manager, "resolve_model_artifact_layout", _resolve)
     monkeypatch.setattr(manager, "ensure_artifact_dir", lambda _layout: None)
     monkeypatch.setattr(manager, "clean_temp_artifacts", lambda _layout: None)
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
     monkeypatch.setattr(
         manager,
         "load_codegen_meta",
@@ -644,7 +595,6 @@ def test_snapshot_manager_normalizes_deepseek_v4_family(monkeypatch, tmp_path):
             {"signature": signature, "codegen_version": manager.CODEGEN_VERSION},
         )(),
     )
-    monkeypatch.setattr(manager, "barrier_after_artifact", lambda: None)
 
     result = manager.ensure_codegen_artifact_from_snapshot(snapshot)
 
@@ -677,7 +627,6 @@ def test_snapshot_layout_uses_model_type_token_instead_of_architecture(
     monkeypatch.setattr(manager, "resolve_model_artifact_layout", _resolve)
     monkeypatch.setattr(manager, "ensure_artifact_dir", lambda _layout: None)
     monkeypatch.setattr(manager, "clean_temp_artifacts", lambda _layout: None)
-    monkeypatch.setattr(manager, "_is_rank0", lambda: True)
     monkeypatch.setattr(
         manager,
         "load_codegen_meta",
@@ -690,7 +639,6 @@ def test_snapshot_layout_uses_model_type_token_instead_of_architecture(
             },
         )(),
     )
-    monkeypatch.setattr(manager, "barrier_after_artifact", lambda: None)
 
     layout = manager.ensure_codegen_artifact_from_snapshot(snapshot)
 

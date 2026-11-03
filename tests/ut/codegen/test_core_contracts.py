@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,7 +34,6 @@ from hyper_parallel.codegen.artifact import (
 )
 from hyper_parallel.codegen.check.preflight import verify_output_hashes
 from hyper_parallel.codegen.emit.bundle import _rewrite_sibling_imports
-from hyper_parallel.codegen.hash import canonical_json, signature_from_spec
 from hyper_parallel.codegen.meta import (
     CodegenMeta,
     load_codegen_meta,
@@ -308,17 +306,6 @@ def test_codegen_layout_warns_and_anchors_for_unknown_families(
     assert "no_such_model_type" in caplog.text
 
 
-@pytest.mark.parametrize(("rank", "expected"), [("0", True), ("1", False)])
-def test_rank_detection_uses_torchrun_environment_before_process_group(
-    monkeypatch: pytest.MonkeyPatch,
-    rank: str,
-    expected: bool,
-) -> None:
-    monkeypatch.setenv("RANK", rank)
-
-    assert manager._is_rank0() is expected
-
-
 def test_atomic_bundle_hashes_staged_outputs_and_writes_meta_last(
     tmp_path: Path,
 ) -> None:
@@ -438,16 +425,6 @@ def test_temp_artifact_cleanup_only_removes_codegen_siblings(tmp_path: Path) -> 
     assert keep.is_dir()
 
 
-def test_signature_is_stable_for_key_order_and_sensitive_to_values() -> None:
-    left = {"parallel": {"tp": 2, "cp": 1}, "source": {"sha256": "abc"}}
-    reordered = {"source": {"sha256": "abc"}, "parallel": {"cp": 1, "tp": 2}}
-    changed = {"source": {"sha256": "abc"}, "parallel": {"cp": 1, "tp": 4}}
-
-    assert canonical_json(left) == canonical_json(reordered)
-    assert signature_from_spec(left) == signature_from_spec(reordered)
-    assert signature_from_spec(left) != signature_from_spec(changed)
-
-
 @pytest.mark.parametrize("text", ["R", "S(1)", "S(-1)", "P(sum)", "SS(0,2)"])
 def test_placement_strings_round_trip(text: str) -> None:
     assert placement_to_string(parse_placement(text)) == text
@@ -490,38 +467,3 @@ def test_uneven_shard_placement_refuses_to_freeze() -> None:
 def test_malformed_placement_strings_fail_fast(text: str) -> None:
     with pytest.raises(ValueError):
         parse_placement(text)
-
-
-def test_wait_for_rank0_ignores_stale_signature(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Waiting for rank0 ignores stale signatures."""
-    layout = resolve_artifact_layout(str(tmp_path / "train.yaml"), "demo")
-    observed = iter((_meta("sig-old"), _meta("sig-current")))
-    calls: list[str] = []
-
-    def fake_load(path: str) -> CodegenMeta:
-        """Return stale metadata once, followed by the current bundle."""
-        calls.append(path)
-        return next(observed)
-
-    monkeypatch.setattr(manager, "load_codegen_meta", fake_load)
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-    manager.wait_for_rank0_artifact(layout, "sig-current", timeout_s=1.0)
-    assert calls == [layout.meta_path, layout.meta_path]
-
-
-def test_wait_for_rank0_times_out_when_only_stale_meta_exists(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Waiting for rank0 times out when only stale meta exists."""
-    layout = resolve_artifact_layout(str(tmp_path / "train.yaml"), "demo")
-    ticks = iter((0.0, 0.0, 2.0))
-    monkeypatch.setattr(manager, "load_codegen_meta", lambda _path: _meta("sig-old"))
-    monkeypatch.setattr(time, "monotonic", lambda: next(ticks))
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-    with pytest.raises(TimeoutError, match="timed out waiting for rank0 artifact"):
-        manager.wait_for_rank0_artifact(layout, "sig-current", timeout_s=1.0)

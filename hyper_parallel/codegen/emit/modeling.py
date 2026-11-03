@@ -746,15 +746,6 @@ def _lower_forward_boundaries(text: str, meta: Any, module_name: str) -> str:
     forward references are bound by the runtime parallelize step, so the
     generated file stays runtime-importable without a mesh.
 
-    Two generation modes exist; exactly one is chosen here per generation:
-
-    - the default :func:`lower_forward_boundaries` (the four parallel forms);
-    - the opt-in switch template :func:`lower_forward_boundaries_toggle` (the
-      "original forward + per-dimension ``{tp|cp|ep}_enable`` switches" form),
-      selected only when ``HP_CODEGEN_TOGGLE_FORWARD`` is set (non-empty).  This
-      keeps the default artifact byte-identical while letting a generation opt
-      into the switch template without adding a second runtime path.
-
     ``boundary_classes`` is the FQN -> class-name map frozen at freeze time.  A
     legacy or hand-built plan may have no such map; without
     it the lowerer cannot resolve any boundary FQN to its owning class, so it
@@ -763,21 +754,11 @@ def _lower_forward_boundaries(text: str, meta: Any, module_name: str) -> str:
     When the map is absent, the source remains untouched and runtime dispatch
     handles the boundaries.
     """
-    from hyper_parallel.codegen.emit.parallel import (
-        lower_forward_boundaries,
-        lower_forward_boundaries_toggle,
-    )
+    from hyper_parallel.codegen.emit.parallel import lower_forward_boundaries
 
     boundary_classes = getattr(meta, "boundary_classes", None) or {}
     if not boundary_classes:
         return text
-    if os.environ.get("HP_CODEGEN_TOGGLE_FORWARD"):
-        return lower_forward_boundaries_toggle(
-            text,
-            meta,
-            boundary_classes=boundary_classes,
-            module_name=module_name,
-        )
     return lower_forward_boundaries(
         text,
         meta,

@@ -46,7 +46,6 @@ from hyper_parallel.models.replacement import (
 from hyper_parallel.distributed import forward_replacement, inner_wrapper
 from hyper_parallel.distributed._builder.rule_resolver import _resolve_local_compute_fn
 from hyper_parallel.codegen.plan.freeze import freeze_injections
-from hyper_parallel.codegen.spec.project import _canonicalize_override
 from hyper_parallel.trainer.config.resolver import ConfigResolutionError, resolve_config
 from hyper_parallel.trainer.config import (
     PlanOverride,
@@ -677,7 +676,6 @@ class TestModuleReplacementYaml(unittest.TestCase):
             observed["declarations"][0]["replacement_target"],
             f"{__name__}._replace_linear",
         )
-        self.assertIn("replace", _canonicalize_override(rule))
 
         wrong_type = PlanOverride(match="0", replace=ReplaceAction(
             kind="module", source_type="torch.nn.Conv2d", implementation=f"{__name__}._replace_linear"))
@@ -725,8 +723,7 @@ class TestModuleReplacementYaml(unittest.TestCase):
         self.assertEqual(ep_rule.to_dict()["replace"]["implementation"]["scale"], 2.0)
         self.assertNotIn("region_dispatch", ep_rule.to_dict())
         self.assertIs(cp_rule.replace.implementation.callable, _wrapper_factory)
-        canonical = _canonicalize_override(cp_rule)
-        self.assertEqual(canonical.pop("match"), "*.self_attn.forward")
+        self.assertEqual(cp_rule.to_dict()["match"], "*.self_attn.forward")
         self.assertEqual(entries_to_plan_overrides(config.plan_overrides, cp_size=1, ep_size=1), {})
         active = entries_to_plan_overrides(config.plan_overrides, cp_size=2, ep_size=2)
         self.assertIs(active["*.mlp"].local_compute_fn, ep_rule.replace.implementation)
@@ -772,7 +769,6 @@ class TestModuleReplacementYaml(unittest.TestCase):
         self.assertIs(model.layers[0].gate, original_gate)
         self.assertTrue(torch.equal(result, torch.full_like(result, 8.0)))
         self.assertTrue(torch.equal(inputs.grad, torch.full_like(inputs, 4.0)))
-        self.assertIn("replace", _canonicalize_override(rule))
 
         gated = PlanOverride(match="*.gate.route", when="cp", replace=ReplaceAction(
             kind="method", implementation=f"{__name__}._route_factory"))

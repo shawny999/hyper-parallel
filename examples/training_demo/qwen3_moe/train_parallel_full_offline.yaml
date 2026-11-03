@@ -1,7 +1,7 @@
 # Full Qwen3-30B-A3B checkpoint training with an Offline Indexed Dataset.
 #
 # This file mirrors the model, parallel, optimizer, and replacement settings in
-# examples/training_demo/qwen3_moe/train_parallel_online.yaml. Only the data
+# hyper_parallel/models/qwen3_moe/recipes/train.yaml. Only the data
 # pipeline uses the explicit Offline implementations.
 
 model:

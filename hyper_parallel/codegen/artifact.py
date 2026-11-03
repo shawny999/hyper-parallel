@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-import hashlib
 import logging
 import os
 from pathlib import Path
@@ -346,42 +345,6 @@ def clean_temp_artifacts(layout: ArtifactLayout) -> None:
             shutil.rmtree(os.path.join(parent, name), ignore_errors=True)
 
 
-def artifact_failure_path(layout: ArtifactLayout, signature: str) -> str:
-    """Return the rank-coordination marker for one failed publication."""
-    if not isinstance(signature, str) or not signature:
-        raise ValueError("codegen signature must be a non-empty string")
-    parent = os.path.dirname(layout.artifact_dir) or "."
-    bundle_name = os.path.basename(layout.artifact_dir.rstrip(os.sep)) or "generated"
-    marker_id = hashlib.sha256(signature.encode("utf-8")).hexdigest()
-    return os.path.join(parent, f".{bundle_name}.codegen_failed_{marker_id}")
-
-
-def publish_artifact_failure(
-    layout: ArtifactLayout,
-    signature: str,
-    reason: str,
-) -> None:
-    """Atomically notify waiting ranks that the owner failed generation."""
-    path = artifact_failure_path(layout, signature)
-    parent = os.path.dirname(path) or "."
-    Path(parent).mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=".codegen_failure_", dir=parent)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(reason)
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-
-
-def clear_artifact_failure(layout: ArtifactLayout, signature: str) -> None:
-    """Remove a failure marker after every rank has observed the outcome."""
-    path = artifact_failure_path(layout, signature)
-    if os.path.isfile(path):
-        os.unlink(path)
-
-
 @contextmanager
 def artifact_generation_lock(
     layout: ArtifactLayout,
@@ -414,12 +377,9 @@ def artifact_generation_lock(
 
 __all__ = [
     "ArtifactLayout",
-    "artifact_failure_path",
     "artifact_generation_lock",
-    "clear_artifact_failure",
     "clean_temp_artifacts",
     "ensure_artifact_dir",
-    "publish_artifact_failure",
     "resolve_default_artifact_layout",
     "resolve_model_artifact_layout",
     "resolve_artifact_layout",

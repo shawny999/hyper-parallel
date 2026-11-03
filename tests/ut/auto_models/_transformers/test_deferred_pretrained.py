@@ -83,8 +83,8 @@ class TestDeferredPretrained(unittest.TestCase):
         Expectation: Both loaders construct on meta without a checkpoint path and load after sharding.
         """
         for loader in ("dcp", "legacy"):
-            for is_hf_model, backend in ((True, None), (False, None)):
-                with self.subTest(loader=loader, is_hf_model=is_hf_model, backend=backend):
+            for is_hf_model in (True, False):
+                with self.subTest(loader=loader, is_hf_model=is_hf_model):
                     model = torch.nn.Linear(2, 2)
                     with patch.dict(os.environ, {"HYPER_PARALLEL_HF_LOADER": loader}), \
                             patch(_TARGET + "._init_model", return_value=(None, model)) as initialize, \
@@ -93,7 +93,7 @@ class TestDeferredPretrained(unittest.TestCase):
                             patch("torch.distributed.is_initialized", return_value=False):
                         HyperAutoModelForImageTextToText._build_model(
                             "/weights", is_hf_model=is_hf_model, hf_config=None, mesh=None,
-                            sharding_planner=None, fsdp2_manager=None, backend=backend, peft_config=None,
+                            sharding_planner=None, fsdp2_manager=None, peft_config=None,
                             torch_dtype=torch.float32, attn_implementation="eager", validate_placement=False,
                             load_base_model=True, local_files_only=True, ignore_mismatched_sizes=True)
                     self.assertEqual(initialize.call_args.args[1], None)
@@ -119,7 +119,7 @@ class TestDeferredPretrained(unittest.TestCase):
                 patch(_TARGET + "._current_device", return_value=torch.device("cpu")):
             HyperAutoModelForImageTextToText._build_model(
                 None, is_hf_model=False, hf_config=None, mesh=None, sharding_planner=None,
-                fsdp2_manager=None, backend=None, peft_config=None, torch_dtype=torch.float32,
+                fsdp2_manager=None, peft_config=None, torch_dtype=torch.float32,
                 attn_implementation="eager", validate_placement=False, load_base_model=False)
         self.assertIsNone(initialize.call_args.args[1])
         self.assertFalse(infrastructure.call_args.kwargs["load_base_model"])
@@ -137,7 +137,7 @@ class TestDeferredPretrained(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "quantized initialization"):
                 HyperAutoModelForImageTextToText._build_model(
                     "/weights", is_hf_model=True, hf_config=None, mesh=None, sharding_planner=None,
-                    fsdp2_manager=None, backend=None, peft_config=None, torch_dtype=torch.float32,
+                    fsdp2_manager=None, peft_config=None, torch_dtype=torch.float32,
                     attn_implementation="eager", validate_placement=False, load_base_model=True,
                     quantization_config=object())
         initialize.assert_not_called()
@@ -158,7 +158,7 @@ class TestDeferredPretrained(unittest.TestCase):
                 patch(_TARGET + "._current_device", return_value=torch.device("cpu")):
             HyperAutoModelForImageTextToText._build_model(
                 "/weights", is_hf_model=True, hf_config=None, mesh=None, sharding_planner=None,
-                fsdp2_manager=None, backend=None, peft_config=None, torch_dtype=torch.float32,
+                fsdp2_manager=None, peft_config=None, torch_dtype=torch.float32,
                 attn_implementation="eager", validate_placement=False, load_base_model=True,
                 quantization_config=quantization)
         self.assertEqual(initialize.call_args.args[1], "/weights")
@@ -186,7 +186,7 @@ class TestDeferredPretrained(unittest.TestCase):
                             patch(_TARGET + "._current_device", return_value=torch.device("cpu")):
                         model = HyperAutoModelForSequenceClassification._build_model(
                             directory, is_hf_model=True, hf_config=config, mesh=None,
-                            sharding_planner=None, fsdp2_manager=None, backend=None, peft_config=None,
+                            sharding_planner=None, fsdp2_manager=None, peft_config=None,
                             torch_dtype=torch.float32, attn_implementation="eager", validate_placement=False,
                             load_base_model=True, local_files_only=True, ignore_mismatched_sizes=True)
                     self.assertEqual(model._hp_checkpoint_load_report.missing_keys, ())

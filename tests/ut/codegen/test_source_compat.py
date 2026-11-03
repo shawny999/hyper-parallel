@@ -12,25 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Tests for environment-driven remote-source compatibility."""
+"""Tests for model-owned Kimi remote-source compatibility."""
 
 from transformers.utils import generic
 
-from hyper_parallel.codegen.source.compat import install_output_recorder_compat
+from hyper_parallel.models.kimi_k3.adapter.codegen import prepare_model_import
 
 
-def test_output_recorder_compat_installs_only_when_capability_is_missing():
-    """Install the descriptor by capability without inspecting a model family."""
+def test_kimi_output_recorder_compat_installs_only_when_missing():
+    """Install the Kimi descriptor only when Transformers does not provide it."""
     sentinel = object()
     original = getattr(generic, "OutputRecorder", sentinel)
     if original is not sentinel:
         delattr(generic, "OutputRecorder")
     try:
-        install_output_recorder_compat()
+        prepare_model_import()
         installed = generic.OutputRecorder
         recorder = installed(dict, index=2)
 
-        install_output_recorder_compat()
+        prepare_model_import()
 
         assert generic.OutputRecorder is installed
         assert recorder.target_class is dict

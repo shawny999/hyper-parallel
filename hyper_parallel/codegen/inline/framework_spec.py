@@ -231,7 +231,10 @@ def _interface_function(factory: Any, target: ReplacementTarget) -> Any:
 
 
 def _build_replacement_spec(
-    factory: Any, target: ReplacementTarget, old_ctor: str
+    factory: Any,
+    target: ReplacementTarget,
+    old_ctor: str,
+    model_type: str | None,
 ) -> ReplacementSpec | None:
     """Build the source-level replacement one factory declares.
 
@@ -254,11 +257,11 @@ def _build_replacement_spec(
     )
     snippets: tuple[ModuleSnippetPatch, ...] = ()
     if target.interface:
-        from hyper_parallel.codegen.inline.attention import (  # pylint: disable=C0415
-            render_attention_class,
-        )
-
-        expanded = render_attention_class(
+        provider = _family_provider(model_type, "codegen")
+        renderer = getattr(provider, "render_replacement_source", None)
+        if renderer is None:
+            return None
+        expanded = renderer(
             component, interface=_interface_function(factory, target)
         )
         imports.extend(
@@ -334,7 +337,7 @@ def _resolve_replacement_spec(
     or a rule with no ``module_type`` naming the source class it replaces -- has
     no spec, and the rule is left to the native path.
     """
-    del model_type, target
+    del target
     # The source class the constructor call replaces: without the rule's
     # ``module_type`` there is no call site to rewrite, and guessing one would
     # silently target the wrong class.
@@ -344,7 +347,7 @@ def _resolve_replacement_spec(
     replacement = replacement_target(factory)
     if replacement is None:
         return None
-    return _build_replacement_spec(factory, replacement, old_ctor)
+    return _build_replacement_spec(factory, replacement, old_ctor, model_type)
 
 
 def _component_replacement_spec(
@@ -370,7 +373,7 @@ def _component_replacement_spec(
         if replacement is not None:
             # No interface: a direct component hands over no family kernel,
             # so the factory argument of _build_replacement_spec is unused.
-            spec = _build_replacement_spec(None, replacement, old_ctor)
+            spec = _build_replacement_spec(None, replacement, old_ctor, model_type)
     _REPLACEMENT_CACHE[key] = spec
     return spec
 

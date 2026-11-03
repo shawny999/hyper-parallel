@@ -151,9 +151,8 @@ def _prepare_pretrained_build(
         config_overrides: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         force_hf: bool,
-        backend: Optional[Any],
-) -> tuple[Any, Any, PretrainedConfig, bool, Any]:
-    """Prepare infrastructure, HF configuration and the selected modeling backend."""
+) -> tuple[Any, Any, PretrainedConfig, bool]:
+    """Prepare infrastructure, HF configuration and model-path selection."""
     # ② Instantiate infrastructure
     sharding_planner, fsdp2_manager = instantiate_infrastructure(
         distributed_setup=distributed_setup,
@@ -168,7 +167,7 @@ def _prepare_pretrained_build(
     # ④ Determine model path
     is_hf_model = get_is_hf_model(hf_config, force_hf)
 
-    return sharding_planner, fsdp2_manager, hf_config, is_hf_model, backend
+    return sharding_planner, fsdp2_manager, hf_config, is_hf_model
 
 
 class _BaseHyperAutoModelClass:
@@ -207,7 +206,6 @@ class _BaseHyperAutoModelClass:
         pretrained_model_name_or_path: str,
         *model_args: Any,
         distributed_setup: Optional[DistributedSetup] = None,
-        backend: Optional[Any] = None,
         peft_config: Optional[Any] = None,
         torch_dtype: Union[str, torch.dtype] = "auto",
         attn_implementation: str = "sdpa",
@@ -261,9 +259,8 @@ class _BaseHyperAutoModelClass:
             config_overrides,
             kwargs,
             force_hf,
-            backend,
         )
-        sharding_planner, fsdp2_manager, hf_config, is_hf_model, backend = prepared
+        sharding_planner, fsdp2_manager, hf_config, is_hf_model = prepared
         # ⑤ Build model
         model = cls._build_model(
             pretrained_model_name_or_path,
@@ -273,7 +270,6 @@ class _BaseHyperAutoModelClass:
             mesh=mesh,
             sharding_planner=sharding_planner,
             fsdp2_manager=fsdp2_manager,
-            backend=backend,
             peft_config=peft_config,
             torch_dtype=torch_dtype,
             attn_implementation=attn_implementation,
@@ -303,7 +299,6 @@ class _BaseHyperAutoModelClass:
         *model_args: Any,
         distributed_setup: Optional[DistributedSetup] = None,
         device_mesh: Optional[Any] = None,
-        backend: Optional[Any] = None,
         peft_config: Optional[Any] = None,
         torch_dtype: Union[str, torch.dtype] = "auto",
         attn_implementation: str = "sdpa",
@@ -345,7 +340,6 @@ class _BaseHyperAutoModelClass:
             mesh=mesh,
             sharding_planner=sharding_planner,
             fsdp2_manager=fsdp2_manager,
-            backend=backend,
             peft_config=peft_config,
             torch_dtype=torch_dtype,
             attn_implementation=attn_implementation,
@@ -374,7 +368,6 @@ class _BaseHyperAutoModelClass:
         mesh,
         sharding_planner,
         fsdp2_manager,
-        backend,
         peft_config,
         torch_dtype,
         attn_implementation,
@@ -431,7 +424,6 @@ class _BaseHyperAutoModelClass:
                 torch_dtype,
                 is_hf_model,
                 *model_args,
-                backend=backend,
                 **init_kwargs,
             )
 

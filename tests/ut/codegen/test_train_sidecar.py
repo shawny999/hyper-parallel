@@ -14,9 +14,11 @@
 # ============================================================================
 """Unit tests for the native-training Codegen sidecar."""
 
+import importlib.util
 import os
 from pathlib import Path
 import sys
+from types import ModuleType
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -100,6 +102,44 @@ class TestTrainSidecar(unittest.TestCase):
 
         self.assertIn("exit code 7", captured.output[0])
         self.assertIn("native training continues", captured.output[0])
+
+    def test_native_training_entry_starts_codegen_with_same_arguments(self) -> None:
+        """The standard training entry starts rank-filtered generation first."""
+        config = MagicMock()
+        config._yaml_path = "/recipes/train.yaml"  # pylint: disable=protected-access
+        parse_args = MagicMock(return_value=config)
+        trainer_type = MagicMock()
+        parser_module = ModuleType("hyper_parallel.trainer.config.parser")
+        parser_module.parse_training_args = parse_args
+        config_module = ModuleType("hyper_parallel.trainer.config")
+        config_module.TrainerConfig = object
+        trainer_module = ModuleType("hyper_parallel.trainer.text_trainer")
+        trainer_module.TextTrainer = trainer_type
+        script_path = Path(__file__).parents[3] / "scripts" / "train_lm.py"
+        spec = importlib.util.spec_from_file_location("_codegen_test_train_lm", script_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        overrides = ["--accelerator.tp_size=2", "--training.train_iters=10"]
+
+        with patch.dict(
+            sys.modules,
+            {
+                "hyper_parallel.trainer.config.parser": parser_module,
+                "hyper_parallel.trainer.config": config_module,
+                "hyper_parallel.trainer.text_trainer": trainer_module,
+            },
+        ):
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+        with patch.object(module, "start_codegen_sidecar") as start_sidecar, patch.object(
+            sys, "argv", ["scripts/train_lm.py", "train.yaml", *overrides]
+        ):
+            module.main()
+
+        start_sidecar.assert_called_once_with(config._yaml_path, overrides)  # pylint: disable=protected-access
+        trainer_type.assert_called_once_with(config)
+        trainer_type.return_value.train.assert_called_once_with()
 
     @patch.object(train_sidecar.os, "execv")
     @patch.object(train_sidecar, "start_codegen_sidecar")

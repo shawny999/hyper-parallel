@@ -26,11 +26,22 @@ import torch
 from hyper_parallel.codegen.hash import file_line_count, sha256_file
 from hyper_parallel.codegen.manager import ensure_codegen_artifact_from_snapshot
 from hyper_parallel.codegen.session import CodegenBuildSession
-from hyper_parallel.codegen.source.compat import install_output_recorder_compat
 from hyper_parallel.components.checkpoint.weight_conversion import get_model_conversion_mapping
 from hyper_parallel.core.dtensor.init_weights import init_empty_weights
 from hyper_parallel.models._transformers import auto_model, model_builder
 from hyper_parallel.models import replacement as replacement_api
+from hyper_parallel.models.registry import get_model_adapter
+
+
+def _prepare_model_source_compat(hf_config: Any) -> None:
+    """Run an optional model-owned compatibility hook before construction."""
+    model_type = getattr(hf_config, "model_type", None)
+    adapter = get_model_adapter(model_type) if model_type else None
+    loader = getattr(adapter, "codegen", None) if adapter is not None else None
+    provider = loader() if loader is not None else None
+    prepare = getattr(provider, "prepare_model_import", None)
+    if prepare is not None:
+        prepare()
 
 
 @dataclass
@@ -55,7 +66,6 @@ def _record_source(
     model: Any,
     hf_config: Any,
     pretrained_model_name_or_path: Any,
-    backend: Any,
     is_hf_model: bool,
 ) -> None:
     """Record deterministic source identity from the constructed meta model."""
@@ -76,7 +86,6 @@ def _record_source(
             None if pretrained_model_name_or_path is None else str(pretrained_model_name_or_path)
         ),
         "is_hf_model": bool(is_hf_model),
-        "backend": str(getattr(backend, "value", backend) or "native"),
     })
 
 
@@ -267,7 +276,6 @@ def _codegen_build_model(session: CodegenBuildSession, artifact_dir: Optional[st
         mesh,
         sharding_planner,
         fsdp2_manager,
-        backend,
         peft_config,
         torch_dtype,
         attn_implementation,
@@ -304,7 +312,7 @@ def _codegen_build_model(session: CodegenBuildSession, artifact_dir: Optional[st
         )
         if "trust_remote_code" in kwargs:
             init_kwargs["trust_remote_code"] = kwargs["trust_remote_code"]
-        install_output_recorder_compat()
+        _prepare_model_source_compat(hf_config)
         with _codegen_model_init_context():
             _, model = auto_model._init_model(  # pylint: disable=protected-access
                 cls,
@@ -314,7 +322,6 @@ def _codegen_build_model(session: CodegenBuildSession, artifact_dir: Optional[st
                 torch_dtype,
                 is_hf_model,
                 *model_args,
-                backend=backend,
                 **init_kwargs,
             )
         _record_source(
@@ -322,7 +329,6 @@ def _codegen_build_model(session: CodegenBuildSession, artifact_dir: Optional[st
             model,
             hf_config,
             pretrained_model_name_or_path,
-            backend,
             is_hf_model,
         )
         model_builder._apply_pre_sharding_features(  # pylint: disable=protected-access
