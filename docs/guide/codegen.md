@@ -43,14 +43,32 @@ Codegen 会通过这个地址读取 Hugging Face 模型自带的结构配置和�
 
 ### 1.3 准备训练 YAML
 
-这份 YAML 同时用于原生训练、CLI 生成、Trainer 自动生成和 generated model 训练，不需要再准备单独的
-Codegen 配置。YAML 至少要指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以及需要应用的模块或
+这份 YAML 同时用于训练、CLI 生成和 Trainer 自动生成，不需要再准备单独的 Codegen 配置。YAML 至少要
+指定 Hugging Face 模型来源、TP/CP/EP/PP 等并行度，以及需要应用的模块或
 forward 替换规则。建议复制最接近的 `recipes/train.yaml` 或 training demo 后修改，不要从空文件开始编写。
 
 ## 2. CLI 命令
 
 使用标准 `scripts/train_lm.py` 启动训练时，global rank 0 会在独立的单进程 sidecar 中自动生成产物；
 生成失败会输出原因，但不会中断原生训练。也可以不启动训练，单独生成：
+
+```bash
+torchrun --standalone --nproc_per_node=8 \
+  scripts/train_lm.py path/to/train.yaml
+```
+
+生成目录中的 `modeling_*_gen_npu.py` 是模型源码模块，不是训练启动脚本；不要直接执行该文件。
+
+需要验证生成模型时，使用独立入口加载 modeling 文件，并继续使用同一份训练 YAML：
+
+```bash
+torchrun --standalone --nproc_per_node=8 \
+  scripts/train_generated.py \
+  --model-file hyper_parallel/models/qwen3_moe/generated/modeling_Qwen3_Moe_gen_npu.py \
+  examples/training_demo/qwen3_moe/train_parallel_online.yaml
+```
+
+该入口只负责加载指定的 generated modeling 模块；数据、优化器和并行配置仍由标准训练 YAML 提供。
 
 ```bash
 python -m hyper_parallel.codegen --verbose generate \
