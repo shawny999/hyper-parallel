@@ -66,6 +66,7 @@ class ConstructorReplacePatch:
     mode: Literal["name", "wrap_source"] = "name"
     keyword_args: tuple[str, ...] = ()
     scope_attrs: tuple[str, ...] = ()
+    scope_fqns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class ForwardExtractPatch:
     class_name: str
     method_name: str
     body: str
+    merge_original_body: bool = False
 
 
 @dataclass(frozen=True)

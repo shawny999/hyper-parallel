@@ -21,23 +21,27 @@ appended layers:
 * the adapter-driven inline patch — replaced modules and the TP / CP / EP
   strategies lowered into the copied source at their semantic sites.
 
-Boundary forwards are then lowered at the boundary classes.  The artifact
-publishes no plan globals: the runtime reads the frozen plan from
-``codegen_meta.json`` and shards from it (``runtime.parallelize_from_generated``
-falls back to ``_parallelize_inline_from_meta`` when the module defines no
-``hp_parallelize``).  The preflight import checks that the assembled module
-remains importable in the training environment.
+Boundary forwards are then lowered at the boundary classes. The artifact is
+both an auditable source export and a directly executable model training entry.
+Training still derives its live plan from the supplied YAML through the native
+Trainer; preflight validates syntax and the recorded generation contract.
 """
+
 from __future__ import annotations
 
+import ast
 import io
+import keyword
 import os
 import tokenize
 from typing import Any
 
+from hyper_parallel.codegen.source.composition import compose_nested_model_sources
+
 # ---------------------------------------------------------------------------
 # source copy
 # ---------------------------------------------------------------------------
+
 
 def copy_original_modeling(source: Any) -> str:
     """Read the original modeling source text from a ``ResolvedSource``-like.
@@ -92,6 +96,7 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
     unless_anchor = _relative_anchor(module_name)
     if unless_anchor is None:
         return text
+    text = _rewrite_dynamic_relative_imports(text, unless_anchor)
 
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
@@ -110,16 +115,32 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
             continue
         # the spec must start with a relative (dots) operator
         j = i + 1
-        while j < n and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT):
+        while j < n and tokens[j].type in (
+            tokenize.NL,
+            tokenize.NEWLINE,
+            tokenize.COMMENT,
+        ):
             j += 1
-        if j >= n or tokens[j].type != tokenize.OP or not set(tokens[j].string) <= {"."}:
+        if (
+            j >= n
+            or tokens[j].type != tokenize.OP
+            or not set(tokens[j].string) <= {"."}
+        ):
             i += 1
             continue
         dots_tok = tokens[j]
-        dots = len(dots_tok.string)
+        dots = 0
+        while (
+            j < n
+            and tokens[j].type == tokenize.OP
+            and tokens[j].string
+            and set(tokens[j].string) == {"."}
+        ):
+            dots += len(tokens[j].string)
+            j += 1
 
         # collect the relative module path: NAME ('.' NAME)*
-        k = j + 1
+        k = j
         path: list[str] = []
         last_path_tok = None
         while k < n:
@@ -138,7 +159,11 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
         # the path must be followed by the ``import`` keyword (allow a comment
         # line in between; a multiline symbol list comes *after* ``import``).
         m = k
-        while m < n and tokens[m].type in (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT):
+        while m < n and tokens[m].type in (
+            tokenize.NL,
+            tokenize.NEWLINE,
+            tokenize.COMMENT,
+        ):
             m += 1
         if m >= n or tokens[m].type != tokenize.NAME or tokens[m].string != "import":
             i += 1
@@ -157,6 +182,49 @@ def rewrite_relative_imports(text: str, module_name: str) -> str:
     if not edits:
         return text
     return _splice(text, edits)
+
+
+def _rewrite_dynamic_relative_imports(text: str, anchor: list[str]) -> str:
+    """Rewrite imports whose resolved package is not valid Python syntax."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return text
+    edits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.level == 0:
+            continue
+        absolute = _absolute_spec(anchor, node.level, (node.module or "").split("."))
+        if absolute is None or _is_import_syntax_safe(absolute):
+            continue
+        assignments = []
+        for alias in node.names:
+            if alias.name == "*":
+                raise ValueError(
+                    f"codegen cannot rewrite a wildcard import from dynamic module {absolute!r}"
+                )
+            target = alias.asname or alias.name
+            assignments.append(
+                f"{target} = __import__({absolute!r}, fromlist=[{alias.name!r}]).{alias.name}"
+            )
+        indent = " " * node.col_offset
+        replacement = ("\n" + indent).join(assignments)
+        edits.append(
+            (
+                (node.lineno, node.col_offset),
+                (node.end_lineno, node.end_col_offset),
+                replacement,
+            )
+        )
+    return _splice(text, edits) if edits else text
+
+
+def _is_import_syntax_safe(module: str) -> bool:
+    """Return whether every dotted component can appear in an import statement."""
+    return all(
+        part.isidentifier() and not keyword.iskeyword(part)
+        for part in module.split(".")
+    )
 
 
 def _relative_anchor(module_name: str) -> list[str] | None:
@@ -195,7 +263,9 @@ def _absolute_spec(anchor: list[str], dots: int, path: list[str]) -> str | None:
     return ".".join(part for part in parts if part)
 
 
-def _splice(text: str, edits: list[tuple[tuple[int, int], tuple[int, int], str]]) -> str:
+def _splice(
+    text: str, edits: list[tuple[tuple[int, int], tuple[int, int], str]]
+) -> str:
     """Splice absolute specs back into ``text`` by token (row, col) positions.
 
     Edits are applied last-first so the earlier offsets stay valid.  A single
@@ -233,7 +303,8 @@ def _splice(text: str, edits: list[tuple[tuple[int, int], tuple[int, int], str]]
 # file assembly
 # ---------------------------------------------------------------------------
 
-def emit_modeling_file(meta: Any) -> str:
+
+def emit_modeling_file(meta: Any, *, patch_plan: Any = None) -> str:
     """Assemble the full generated modeling file text.
 
     Returns the text (not written to disk) so the caller can compute a diff
@@ -256,20 +327,411 @@ def emit_modeling_file(meta: Any) -> str:
         else getattr(meta.source, "module_name", "")
     )
     text = rewrite_relative_imports(text, module_name)
-    text = _apply_inline_modeling(text, meta)
+    text = compose_nested_model_sources(text, meta)
+    text = _apply_inline_modeling(text, meta, patch_plan=patch_plan)
+    from hyper_parallel.codegen.emit.recorded import materialize_recorded_forwards
+
+    source_path = (
+        meta.source.get("file_path")
+        if isinstance(meta.source, dict)
+        else getattr(meta.source, "file_path", None)
+    )
+    text = materialize_recorded_forwards(
+        text,
+        meta,
+        patch_plan=patch_plan,
+        source_path=(None if getattr(meta, "nested_components", None) else source_path),
+    )
     text = _lower_forward_boundaries(text, meta, module_name)
+    _verify_recorded_patch_materialization(text, meta, patch_plan=patch_plan)
     return _banner(meta) + text
 
 
-def _apply_inline_modeling(text: str, meta: Any) -> str:
+def _verify_recorded_patch_materialization(
+    text: str,
+    meta: Any,
+    *,
+    patch_plan: Any = None,
+) -> None:
+    """Require every trainer-installed source-visible patch to be materialized."""
+    patches = patch_plan
+    local_records = (
+        getattr(patches, "local_computes", ()) if patches is not None else ()
+    )
+    replacement_records = (
+        getattr(patches, "module_replacements", ()) if patches is not None else ()
+    )
+    wrapper_records = (
+        getattr(patches, "inner_wrappers", ()) if patches is not None else ()
+    )
+    if not local_records and not replacement_records and not wrapper_records:
+        return
+    tree = ast.parse(text)
+    classes = _class_index(tree)
+    materialized = getattr(meta, "materialized_patches", None)
+    if isinstance(materialized, list):
+        materialized.clear()
+    missing = _verify_local_records(tree, classes, local_records, materialized)
+    missing += _verify_replacement_records(
+        tree, classes, replacement_records, materialized
+    )
+    missing += _verify_wrapper_records(
+        classes, wrapper_records, replacement_records, materialized
+    )
+    if missing:
+        raise RuntimeError(
+            "codegen: trainer-installed source-visible patches were not "
+            "materialized in the generated model source: " + ", ".join(missing)
+        )
+
+
+def _class_index(tree: ast.AST) -> dict[str, ast.ClassDef]:
+    """Index top-level classes by name."""
+    return {
+        node.name: node
+        for node in getattr(tree, "body", ())
+        if isinstance(node, ast.ClassDef)
+    }
+
+
+def _class_methods(host: ast.ClassDef) -> set[str]:
+    """Return method names declared directly by a class."""
+    return {
+        node.name
+        for node in host.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _class_state_names(host: ast.ClassDef) -> set[str]:
+    """Return simple class attributes declared by assignment."""
+    names = set()
+    for child in host.body:
+        targets = (
+            child.targets
+            if isinstance(child, ast.Assign)
+            else (child.target,)
+            if isinstance(child, ast.AnnAssign)
+            else ()
+        )
+        names.update(target.id for target in targets if isinstance(target, ast.Name))
+    return names
+
+
+def _record_materialized(
+    materialized: Any, fqn: str, host: str, kind: str, source_form: str
+) -> None:
+    """Append one materialization record when metadata is mutable."""
+    if isinstance(materialized, list):
+        materialized.append(
+            {"fqn": fqn, "host_class": host, "kind": kind, "source_form": source_form}
+        )
+
+
+def _verify_local_records(
+    tree: ast.AST, classes: dict[str, ast.ClassDef], records: Any, materialized: Any
+) -> list[str]:
+    """Verify local-compute records in one source unit."""
+    missing = []
+    for record in records:
+        class_name = record.module_type.__name__
+        if _bound_function_patch_materialized(tree, record):
+            _record_materialized(
+                materialized,
+                record.module_fqn,
+                class_name,
+                "local_compute",
+                "bound_method_toggle_forward",
+            )
+            continue
+        host = classes.get(class_name)
+        if host is None:
+            continue
+        valid = {"_forward_impl", "forward"} <= _class_methods(
+            host
+        ) and "ep_enable" in _class_state_names(host)
+        if valid:
+            _record_materialized(
+                materialized,
+                record.module_fqn,
+                class_name,
+                "local_compute",
+                "same_class_toggle_forward",
+            )
+        else:
+            missing.append(f"{record.module_fqn} ({class_name})")
+    return missing
+
+
+def _verify_replacement_records(
+    tree: ast.AST, classes: dict[str, ast.ClassDef], records: Any, materialized: Any
+) -> list[str]:
+    """Verify replacement constructors in one source unit."""
+    bound_names = {
+        node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+    } | set(classes)
+    missing = []
+    for record in records:
+        name = record.replacement_type.__name__
+        visible = name in bound_names and any(
+            isinstance(node, ast.Call) and _call_name(node.func) == name
+            for node in ast.walk(tree)
+        )
+        if visible:
+            _record_materialized(
+                materialized,
+                record.module_fqn,
+                name,
+                "module_replacement",
+                "constructor",
+            )
+        else:
+            missing.append(f"{record.module_fqn} (replacement {name})")
+    return missing
+
+
+def _wrapper_identity(record: Any) -> tuple[Any, str, str]:
+    """Return target type, host name, and target FQN for a wrapper record."""
+    target_type = getattr(record, "target_type", None)
+    host_name = (
+        target_type.__name__
+        if target_type is not None
+        else type(record.request.target).__name__
+    )
+    target_fqn = (
+        record.module_fqn
+        if record.target_fqn == "self"
+        else f"{record.module_fqn}.{record.target_fqn}"
+    )
+    return target_type, host_name, target_fqn
+
+
+def _wrapper_source_form(
+    classes: dict[str, ast.ClassDef], host: ast.ClassDef, record: Any, replacements: Any
+) -> str | None:
+    """Return the concrete source form that materializes a wrapper."""
+    if (
+        "forward" in _class_methods(host)
+        and "cp_enable" in _class_state_names(host)
+        and _class_dispatch_reads_state(host, "cp_enable")
+    ):
+        return "same_class_toggle_forward"
+    subclass = next(
+        (
+            node
+            for node in classes.values()
+            if any(
+                isinstance(base, ast.Name) and base.id == host.name
+                for base in node.bases
+            )
+            and "forward" in _class_methods(node)
+        ),
+        None,
+    )
+    if subclass is not None:
+        return "subclass_forward"
+    target_type = getattr(record, "target_type", None)
+    replacement_backed = any(
+        item.module_fqn == record.module_fqn and item.replacement_type is target_type
+        for item in replacements
+    )
+    if replacement_backed and {"_forward_impl", "forward"} <= _class_methods(host):
+        return "replacement_forward_runtime_binding"
+    return None
+
+
+def _verify_wrapper_records(
+    classes: dict[str, ast.ClassDef], records: Any, replacements: Any, materialized: Any
+) -> list[str]:
+    """Verify inner-wrapper records in one source unit."""
+    missing = []
+    for record in records:
+        _, host_name, target_fqn = _wrapper_identity(record)
+        host = classes.get(host_name)
+        if host is None:
+            continue
+        source_form = _wrapper_source_form(classes, host, record, replacements)
+        if source_form:
+            _record_materialized(
+                materialized, target_fqn, host_name, "inner_wrapper", source_form
+            )
+        else:
+            missing.append(f"{target_fqn} (inner wrapper for {host_name})")
+    return missing
+
+
+def _call_name(node: ast.AST) -> str | None:
+    """Return the terminal name of a constructor call expression."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def verify_recorded_patch_bundle(
+    files: dict[str, str],
+    *,
+    patch_plan: Any = None,
+) -> None:
+    """Verify recorded local-compute patches across all generated source units."""
+    records = (
+        getattr(patch_plan, "local_computes", ()) if patch_plan is not None else ()
+    )
+    wrappers = (
+        getattr(patch_plan, "inner_wrappers", ()) if patch_plan is not None else ()
+    )
+    trees = {
+        name: ast.parse(text) for name, text in files.items() if name.endswith(".py")
+    }
+    missing = [
+        f"{record.module_fqn} ({record.module_type.__name__})"
+        for record in records
+        if not any(_tree_has_local_record(tree, record) for tree in trees.values())
+    ]
+    if missing:
+        raise RuntimeError(
+            "codegen: recorded local-compute patches were not materialized "
+            "in their owning source units: " + ", ".join(missing)
+        )
+    replacements = getattr(patch_plan, "module_replacements", ())
+    missing_wrappers = [
+        f"{record.module_fqn} ({_wrapper_identity(record)[1]})"
+        for record in wrappers
+        if not any(
+            _tree_has_wrapper_record(tree, record, replacements)
+            for tree in trees.values()
+        )
+    ]
+    if missing_wrappers:
+        raise RuntimeError(
+            "codegen: recorded inner-wrapper patches were not materialized "
+            "in their owning source units: " + ", ".join(missing_wrappers)
+        )
+    if any("HPCodegen" in text for text in files.values()):
+        raise RuntimeError(
+            "codegen: generated bundle contains forbidden HPCodegen class names"
+        )
+
+
+def _tree_has_local_record(tree: ast.AST, record: Any) -> bool:
+    """Return whether one source tree materializes a local-compute record."""
+    if _bound_function_patch_materialized(tree, record):
+        return True
+    host = _class_index(tree).get(record.module_type.__name__)
+    return (
+        host is not None
+        and {"_forward_impl", "forward"} <= _class_methods(host)
+        and "ep_enable" in _class_state_names(host)
+    )
+
+
+def _tree_has_wrapper_record(tree: ast.AST, record: Any, replacements: Any) -> bool:
+    """Return whether one source tree materializes an inner-wrapper record."""
+    _, class_name, _ = _wrapper_identity(record)
+    host = _class_index(tree).get(class_name)
+    if host is None or "forward" not in _class_methods(host):
+        return False
+    if "cp_enable" in _class_state_names(host) and _class_dispatch_reads_state(
+        host, "cp_enable"
+    ):
+        return True
+    target_type = getattr(record, "target_type", None)
+    replacement_backed = any(
+        item.module_fqn == record.module_fqn and item.replacement_type is target_type
+        for item in replacements
+    )
+    return replacement_backed and {"_forward_impl", "forward"} <= _class_methods(host)
+
+
+def _class_dispatch_reads_state(host: ast.ClassDef, state_name: str) -> bool:
+    """Return whether a class dispatches on one state flag in either layer."""
+    methods = (
+        child
+        for child in host.body
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and child.name in {"forward", "_forward_impl"}
+    )
+    return any(
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+        and node.attr == state_name
+        for method in methods
+        for node in ast.walk(method)
+    )
+
+
+def _bound_function_patch_materialized(tree: ast.AST, record: Any) -> bool:
+    """Return whether a ``MethodType`` forward has an explicit EP toggle."""
+    function_name = getattr(record.original_forward, "__name__", "")
+    if not function_name:
+        return False
+    impl_name = f"{function_name}_hp_impl"
+    functions = {
+        node.name: node
+        for node in getattr(tree, "body", ())
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    wrapper = functions.get(function_name)
+    if wrapper is None or impl_name not in functions:
+        return False
+    return _function_reads_ep_toggle(wrapper) and _tree_binds_method_impl(
+        tree, impl_name
+    )
+
+
+def _function_reads_ep_toggle(wrapper: ast.AST) -> bool:
+    """Return whether a function reads the instance EP enable flag."""
+    return any(
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+        and node.attr == "ep_enable"
+        for node in ast.walk(wrapper)
+    )
+
+
+def _tree_binds_method_impl(tree: ast.AST, impl_name: str) -> bool:
+    """Return whether a tree binds an implementation through MethodType."""
+    return any(
+        isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Attribute) and target.attr == "_forward_impl"
+            for target in node.targets
+        )
+        and isinstance(node.value, ast.Call)
+        and _call_name(node.value.func) == "MethodType"
+        and node.value.args
+        and isinstance(node.value.args[0], ast.Name)
+        and node.value.args[0].id == impl_name
+        for node in ast.walk(tree)
+    )
+
+
+def _apply_inline_modeling(
+    text: str,
+    meta: Any,
+    *,
+    patch_plan: Any = None,
+) -> str:
     """Render the artifact through the adapter-driven inline source pipeline."""
 
     from hyper_parallel.codegen.inline import render_inline_modeling
 
     source = getattr(meta, "source", None)
-    architecture = source.get("architecture") if isinstance(source, dict) else getattr(source, "architecture", None)
+    architecture = (
+        source.get("architecture")
+        if isinstance(source, dict)
+        else getattr(source, "architecture", None)
+    )
     model_type = getattr(meta, "model_class", None) or architecture
-    return render_inline_modeling(text, meta, model_type=model_type)
+    return render_inline_modeling(
+        text,
+        meta,
+        model_type=model_type,
+        patch_plan=patch_plan,
+    )
 
 
 def _lower_forward_boundaries(text: str, meta: Any, module_name: str) -> str:
@@ -286,15 +748,6 @@ def _lower_forward_boundaries(text: str, meta: Any, module_name: str) -> str:
     forward references are bound by the runtime parallelize step, so the
     generated file stays runtime-importable without a mesh.
 
-    Two generation modes exist; exactly one is chosen here per generation:
-
-    - the default :func:`lower_forward_boundaries` (the four parallel forms);
-    - the opt-in switch template :func:`lower_forward_boundaries_toggle` (the
-      "original forward + per-dimension ``{tp|cp|ep}_enable`` switches" form),
-      selected only when ``HP_CODEGEN_TOGGLE_FORWARD`` is set (non-empty).  This
-      keeps the default artifact byte-identical while letting a generation opt
-      into the switch template without adding a second runtime path.
-
     ``boundary_classes`` is the FQN -> class-name map frozen at freeze time.  A
     legacy or hand-built plan may have no such map; without
     it the lowerer cannot resolve any boundary FQN to its owning class, so it
@@ -303,21 +756,11 @@ def _lower_forward_boundaries(text: str, meta: Any, module_name: str) -> str:
     When the map is absent, the source remains untouched and runtime dispatch
     handles the boundaries.
     """
-    from hyper_parallel.codegen.emit.parallel import (
-        lower_forward_boundaries,
-        lower_forward_boundaries_toggle,
-    )
+    from hyper_parallel.codegen.emit.parallel import lower_forward_boundaries
 
     boundary_classes = getattr(meta, "boundary_classes", None) or {}
     if not boundary_classes:
         return text
-    if os.environ.get("HP_CODEGEN_TOGGLE_FORWARD"):
-        return lower_forward_boundaries_toggle(
-            text,
-            meta,
-            boundary_classes=boundary_classes,
-            module_name=module_name,
-        )
     return lower_forward_boundaries(
         text,
         meta,
@@ -345,8 +788,8 @@ def _banner(meta: Any) -> str:
         f"#   injections   : {len(getattr(meta, 'injections', []) or [])} rule(s)",
         "#   runtime      : mesh / FSDP2 / PP / AC / compile still handled by runtime",
         "#",
-        "# [HYPER PLAN] the frozen sharding plan travels in codegen_meta.json;",
-        "# the runtime shards from it.  Regenerate to change.",
+        "# [HYPER PLAN] training derives a live plan from its YAML and this model;",
+        "# codegen_meta.json is generation provenance, not a training input.",
         "#",
         "",
     ]

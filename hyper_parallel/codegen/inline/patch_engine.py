@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
+import textwrap
 from typing import Iterable
 
 from hyper_parallel.codegen.astkit.edits import (
@@ -26,7 +27,7 @@ from hyper_parallel.codegen.astkit.edits import (
     insert_after_imports,
     replace_function_body,
 )
-from hyper_parallel.codegen.astkit.index import build_source_index
+from hyper_parallel.codegen.astkit.index import FunctionInfo, build_source_index
 from hyper_parallel.codegen.inline.ir import (
     ClassRemovalPatch,
     ConstructorReplacePatch,
@@ -56,8 +57,24 @@ def apply_patch_set(source_text: str, patch_set: InlinePatchSet) -> str:
     snippet_edit = _snippet_edit(source_text, index.import_end, index.docstring_end, patch_set.module_snippets)
     if snippet_edit is not None:
         first_pass.append(snippet_edit)
-    first_pass.extend(_constructor_edits(source_text, patch_set.constructor_replaces))
+    waves = _constructor_waves(list(patch_set.constructor_replaces))
+    hits: dict[str, int] = defaultdict(int)
+    if waves:
+        first_pass.extend(_constructor_edits(source_text, waves[0], hits))
     text = apply_edits(source_text, first_pass) if first_pass else source_text
+    for wave in waves[1:]:
+        wave_edits = _constructor_edits(text, wave, hits)
+        if wave_edits:
+            text = apply_edits(text, wave_edits)
+    deferred_edits = _deferred_replacement_edits(
+        text,
+        patch_set.constructor_replaces,
+        hits,
+    )
+    if deferred_edits:
+        text = apply_edits(text, deferred_edits)
+    if patch_set.constructor_replaces:
+        _require_scoped_rewrites(patch_set.constructor_replaces, hits)
 
     if patch_set.class_removals:
         text = _apply_class_removals(text, patch_set.class_removals)
@@ -119,22 +136,68 @@ def _snippet_edit(
     )
 
 
+def _constructor_waves(
+    patch_list: list[ConstructorReplacePatch],
+) -> list[list[ConstructorReplacePatch]]:
+    """Group constructor rewrites into dependency-ordered waves.
+
+    Two compositions force a later wave, re-parsed from the previous
+    wave's output: a patch whose ``old_ctor`` another remaining patch
+    introduces (an ``A -> B`` wrap retargeted further by a ``B -> C``
+    patch), and a ``name`` retarget sharing its ``old_ctor`` with a
+    ``wrap_source`` patch — the inline CP subclass retargets the
+    *outer* wrapper call the wrap introduced, and applying the name
+    swap first would consume the call site the wrap still needs (a
+    scoped wrap with no call site fails loudly, so the order is not
+    optional).
+    """
+
+    remaining = list(patch_list)
+    waves: list[list[ConstructorReplacePatch]] = []
+    while remaining:
+        introduced = {
+            patch.new_ctor for patch in remaining if patch.new_ctor != patch.old_ctor
+        }
+        wave = [
+            patch
+            for patch in remaining
+            if patch.old_ctor not in introduced
+            and not (
+                patch.mode == "name"
+                and any(
+                    other is not patch
+                    and other.mode == "wrap_source"
+                    and other.old_ctor == patch.old_ctor
+                    for other in remaining
+                )
+            )
+        ]
+        if not wave:
+            names = sorted({patch.old_ctor for patch in remaining})
+            raise ValueError(
+                f"codegen: constructor replacement dependency cycle among {names}"
+            )
+        chosen = {id(patch) for patch in wave}
+        remaining = [patch for patch in remaining if id(patch) not in chosen]
+        waves.append(wave)
+    return waves
+
+
 def _constructor_edits(
     source_text: str,
-    patches: Iterable[ConstructorReplacePatch],
+    patches: list[ConstructorReplacePatch],
+    hits: dict[str, int],
 ) -> list[TextEdit]:
     """Build the edits that swap constructor calls per patch target."""
-    patch_list = list(patches)
     patches_by_old: dict[str, list[ConstructorReplacePatch]] = defaultdict(list)
-    for patch in patch_list:
+    for patch in patches:
         patches_by_old[patch.old_ctor].append(patch)
     if not patches_by_old:
         return []
-    scopes = _scopes_by_old_ctor(patch_list)
+    scopes = _scopes_by_old_ctor(patches)
     tree = ast.parse(source_text)
     offsets = _line_offsets(source_text)
     edits: list[TextEdit] = []
-    hits: dict[str, int] = defaultdict(int)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
             continue
@@ -163,7 +226,6 @@ def _constructor_edits(
             edits.append(TextEdit(start, end, replacement))
         else:
             raise ValueError(f"unknown constructor replacement mode: {patch.mode!r}")
-    _require_scoped_rewrites(patch_list, hits)
     return _drop_nested_edits(edits)
 
 
@@ -225,6 +287,93 @@ def _require_scoped_rewrites(
             f"{missing}; the plan replaced modules of this type, so the "
             "replacement cannot be sunk without diverging from the plan"
         )
+
+
+def _deferred_replacement_edits(
+    source_text: str,
+    patches: Iterable[ConstructorReplacePatch],
+    hits: dict[str, int],
+) -> list[TextEdit]:
+    """Install observed wrappers after an imported owner built its subtree.
+
+    Some source models inherit a decoder whose constructor lives in an
+    installed dependency. The copied modeling unit therefore has no direct
+    constructor call to rewrite. For a wrap-style replacement, the native
+    operation is still expressible exactly: wait until the root model has
+    built the observed FQNs, then replace those module attributes in place.
+    """
+    pending = [
+        patch
+        for patch in patches
+        if patch.scope_fqns and not hits.get(patch.old_ctor)
+    ]
+    if not pending:
+        return []
+    tree = ast.parse(source_text)
+    offsets = _line_offsets(source_text)
+    insertions: dict[int, list[str]] = defaultdict(list)
+    for patch in pending:
+        if patch.mode != "wrap_source":
+            continue
+        root_attr = patch.scope_fqns[0].split(".", 1)[0]
+        constructors = _root_constructors(tree, root_attr)
+        if len(constructors) != 1:
+            continue
+        function = constructors[0]
+        _, end = _node_span(function.body[-1], offsets)
+        insertions[end].append(_render_deferred_replacement(patch))
+        hits[patch.old_ctor] += 1
+    return [
+        TextEdit(offset, offset, "".join(parts))
+        for offset, parts in insertions.items()
+    ]
+
+
+def _root_constructors(tree: ast.Module, root_attr: str) -> list[ast.FunctionDef]:
+    """Return constructors that establish the first segment of an observed FQN."""
+    constructors = []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for child in node.body:
+            if not isinstance(child, ast.FunctionDef) or child.name != "__init__":
+                continue
+            if any(
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and target.attr == root_attr
+                for item in ast.walk(child)
+                if isinstance(item, (ast.Assign, ast.AnnAssign))
+                for target in (
+                    item.targets if isinstance(item, ast.Assign) else (item.target,)
+                )
+            ):
+                constructors.append(child)
+    return constructors
+
+
+def _render_deferred_replacement(patch: ConstructorReplacePatch) -> str:
+    """Render an exact-FQN replacement loop inside a root constructor."""
+    arguments = [
+        argument
+        for argument in patch.keyword_args
+        if not argument.startswith("module_fqn=")
+    ]
+    extra = "".join(f", {argument}" for argument in arguments)
+    fqns = repr(tuple(patch.scope_fqns))
+    return (
+        "\n        _hp_replacement_cache = {}\n"
+        f"        for _hp_fqn in {fqns}:\n"
+        "            _hp_parent_fqn, _, _hp_name = _hp_fqn.rpartition('.')\n"
+        "            _hp_parent = self.get_submodule(_hp_parent_fqn)\n"
+        "            _hp_source = getattr(_hp_parent, _hp_name)\n"
+        "            _hp_key = id(_hp_source)\n"
+        "            if _hp_key not in _hp_replacement_cache:\n"
+        f"                _hp_replacement_cache[_hp_key] = {patch.new_ctor}(\n"
+        f"                    module=_hp_source, module_fqn=_hp_fqn{extra})\n"
+        "            setattr(_hp_parent, _hp_name, _hp_replacement_cache[_hp_key])"
+    )
 
 
 def _drop_nested_edits(edits: list[TextEdit]) -> list[TextEdit]:
@@ -412,6 +561,42 @@ def _skip_trailing_blank_lines(text: str, end: int) -> int:
     return end
 
 
+_HIDDEN_ARG_TOKEN = "__hp_hidden_arg__"
+
+
+def _bind_hidden_arg(body: str, func: "FunctionInfo") -> str:
+    """Replace the strategy shell's placeholder token with the host's first arg.
+
+    One strategy template serves hosts whose first parameter name differs
+    (a MoE block takes ``hidden_states``, a dense MLP takes ``x``), so the
+    template names its input ``__hp_hidden_arg__`` and the concrete name is
+    bound here from the host method's own signature at apply time.
+    """
+
+    if _HIDDEN_ARG_TOKEN not in body:
+        return body
+    if not func.param_names:
+        raise RuntimeError(
+            f"codegen: inline strategy body references {_HIDDEN_ARG_TOKEN!r} "
+            "but the target method has no positional parameter to bind it to"
+        )
+    return body.replace(_HIDDEN_ARG_TOKEN, func.param_names[0])
+
+
+def _bind_forward_args(body: str, func: "FunctionInfo") -> str:
+    """Bind a dispatch shell's argument token to the original signature."""
+    token = "__hp_forward_args__"
+    if token not in body:
+        return body
+    args = list(func.param_names)
+    if func.vararg_name:
+        args.append(f"*{func.vararg_name}")
+    args.extend(f"{name}={name}" for name in func.kwonly_names)
+    if func.kwarg_name:
+        args.append(f"**{func.kwarg_name}")
+    return body.replace(token, ", ".join(args))
+
+
 def _forward_extract_edits(
     source_text: str,
     patches: Iterable[ForwardExtractPatch],
@@ -428,18 +613,56 @@ def _forward_extract_edits(
     for patch in patches:
         cls = index.find_class(patch.class_name)
         if cls is None:
+            # Multi-file remote models may define the target in a sibling.
+            # Bundle-level verification requires one source unit to consume
+            # every recorded patch, so this unit can safely leave it alone.
             continue
         func = cls.methods.get(patch.method_name)
         if func is None:
             continue
-        impl = _build_forward_impl_edit(
-            source_text,
-            func,
-        )
+        body = _bind_forward_args(_bind_hidden_arg(patch.body, func), func)
+        state_lines = [
+            f"    {axis}_enable = False"
+            for axis in ("tp", "cp", "ep")
+            if f"self.{axis}_enable" in body
+        ]
+        prefix = "\n".join(state_lines) + "\n\n" if state_lines else ""
+        if patch.merge_original_body:
+            fallback = _forward_impl_fallback(func)
+            if fallback not in body:
+                raise RuntimeError(
+                    f"codegen: merged strategy for {patch.class_name}."
+                    f"{patch.method_name} has no original-forward fallback"
+                )
+            dispatch = body.replace(fallback, "", 1).rstrip()
+            original = textwrap.dedent(
+                source_text[func.body_start:func.body_end]
+            ).rstrip()
+            merged = f"{dispatch}\n\n{original}"
+            if prefix:
+                edits.append(TextEdit(func.def_offset, func.def_offset, prefix))
+            edits.extend(
+                replace_function_body(
+                    source_text, func, merged, indent="        "
+                )
+            )
+            continue
+        impl = _build_forward_impl_edit(source_text, func, prefix=prefix)
         if impl is not None:
             edits.append(impl)
-        edits.extend(replace_function_body(source_text, func, patch.body, indent="        "))
+        edits.extend(replace_function_body(source_text, func, body, indent="        "))
     return edits
+
+
+def _forward_impl_fallback(func: FunctionInfo) -> str:
+    """Render the dispatch-shell fallback that calls the extracted method."""
+    args = list(func.param_names)
+    if func.vararg_name:
+        args.append(f"*{func.vararg_name}")
+    args.extend(f"{name}={name}" for name in func.kwonly_names)
+    if func.kwarg_name:
+        args.append(f"**{func.kwarg_name}")
+    return f"return self._forward_impl({', '.join(args)})"
 
 
 def _call_name(node: ast.AST) -> str | None:

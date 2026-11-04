@@ -28,12 +28,15 @@ half-written bundle can never be imported.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from dataclasses import dataclass
 import logging
 import os
+from pathlib import Path
 import shutil
 import tempfile
-from dataclasses import dataclass
-from pathlib import Path
+import time
+from typing import Iterator
 
 # Bundle directory name shared by every layout constructor.
 _GENERATED_DIR = "generated"
@@ -342,8 +345,39 @@ def clean_temp_artifacts(layout: ArtifactLayout) -> None:
             shutil.rmtree(os.path.join(parent, name), ignore_errors=True)
 
 
+@contextmanager
+def artifact_generation_lock(
+    layout: ArtifactLayout,
+    *,
+    timeout_s: float = 600.0,
+) -> Iterator[None]:
+    """Serialize independent owners publishing into the same bundle path."""
+    parent = os.path.dirname(layout.artifact_dir) or "."
+    bundle_name = os.path.basename(layout.artifact_dir.rstrip(os.sep)) or "generated"
+    lock_path = os.path.join(parent, f".{bundle_name}.codegen.lock")
+    deadline = time.monotonic() + timeout_s
+    descriptor = None
+    while descriptor is None:
+        try:
+            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"codegen: timed out waiting for artifact lock {lock_path}"
+                ) from None
+            time.sleep(0.1)
+    try:
+        os.write(descriptor, str(os.getpid()).encode("ascii"))
+        yield
+    finally:
+        os.close(descriptor)
+        if os.path.isfile(lock_path):
+            os.unlink(lock_path)
+
+
 __all__ = [
     "ArtifactLayout",
+    "artifact_generation_lock",
     "clean_temp_artifacts",
     "ensure_artifact_dir",
     "resolve_default_artifact_layout",

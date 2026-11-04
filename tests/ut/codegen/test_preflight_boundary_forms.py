@@ -20,9 +20,7 @@ decision path) and fails when the generated source does not carry exactly
 that structure.  These tests render a two-form bundle (one tp_collective
 boundary, one identity boundary), assert it passes, then corrupt the source
 in three ways a post-generation edit (or an emitter/check disagreement)
-could produce, and assert each corruption fails fast.  The same bundle emitted
-by the opt-in toggle template must pass as well: its classes carry the toggle
-marker, which the check accepts in place of the static one.
+could produce, and assert each corruption fails fast.
 """
 
 from __future__ import annotations
@@ -34,7 +32,6 @@ import pytest
 from hyper_parallel.codegen.check.preflight import verify_boundary_forms
 from hyper_parallel.codegen.emit.parallel import (
     lower_forward_boundaries,
-    lower_forward_boundaries_toggle,
 )
 from tests.common.mark_utils import arg_mark
 
@@ -87,12 +84,6 @@ def _render() -> str:
     """Render the two-form bundle the same way generation does."""
     plan, classes = _plan()
     return lower_forward_boundaries(SOURCE_TEXT, plan, boundary_classes=classes)
-
-
-def _render_toggle() -> str:
-    """Render the same bundle through the opt-in toggle template."""
-    plan, classes = _plan()
-    return lower_forward_boundaries_toggle(SOURCE_TEXT, plan, boundary_classes=classes)
 
 
 def _layout(tmp_path, text):
@@ -293,25 +284,6 @@ def test_rewritten_identity_class_fails_verification(tmp_path):
 
 @arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
           card_mark="onecard", essential_mark="unessential")
-def test_toggle_marked_boundary_passes_verification(tmp_path):
-    """A tp_collective boundary emitted by the toggle template passes.
-
-    Feature: codegen-preflight
-    Description: The opt-in switch template marks its classes with
-        ``TOGGLE_FORM_MARKER`` (``_hp_boundary_form = "toggle"``) instead of
-        the static template's ``tp_collective`` value, while the meta's
-        re-derived form is still ``tp_collective`` — either marker satisfies
-        the structure invariant.
-    Expectation: No exception.
-    """
-    text = _render_toggle()
-    assert '_hp_boundary_form = "toggle"' in text
-
-    verify_boundary_forms(_meta(), _layout(tmp_path, text))
-
-
-@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
-          card_mark="onecard", essential_mark="unessential")
 def test_inlined_component_body_passes_verification(tmp_path):
     """A fully inlined component body satisfies the structure invariant.
 
@@ -363,19 +335,3 @@ def test_body_without_marker_or_channel_fails_verification(tmp_path):
 
     with pytest.raises(RuntimeError, match="Alpha"):
         verify_boundary_forms(_inline_meta(), _layout(tmp_path, text))
-
-
-@arg_mark(plat_marks=["cpu_linux", "cpu_windows"], level_mark="level0",
-          card_mark="onecard", essential_mark="unessential")
-def test_toggle_marked_boundary_without_marker_fails_verification(tmp_path):
-    """Stripping the toggle marker still fails the check loudly.
-
-    Feature: codegen-preflight
-    Description: A toggle-emitted tp_collective class whose marker was removed
-        carries neither accepted marker.
-    Expectation: ``RuntimeError`` naming the class.
-    """
-    text = _render_toggle().replace('_hp_boundary_form = "toggle"', "")
-
-    with pytest.raises(RuntimeError, match="Alpha"):
-        verify_boundary_forms(_meta(), _layout(tmp_path, text))

@@ -32,6 +32,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 import inspect
+import os
+import sys
 import textwrap
 from typing import Any
 
@@ -68,6 +70,16 @@ class ReplacementTarget:
     wraps_source: bool
     arguments: tuple[ReplacementArgument, ...]
     interface: str | None = None
+
+
+@dataclass(frozen=True)
+class InnerWrapperTarget:
+    """Source-visible helper and companion mesh attribute of an inner wrapper."""
+
+    helper_module: str | None = None
+    helper_name: str | None = None
+    state_attr: str | None = None
+    inline_body: str | None = None
 
 
 def class_name_of(qualified_type: str | None) -> str | None:
@@ -197,31 +209,251 @@ def _factory_arguments(
     return tuple(arguments)
 
 
-def archetype_for_factory(factory_path: str | None) -> Any | None:
-    """Reverse-lookup a MoE archetype by its compute-factory ``_target_``.
-
-    A YAML ``replace.implementation`` that names a known archetype factory
-    resolves to that archetype: the strategy kind / target class / boundary
-    sub-patterns / EP body keys are then structural, not declared per family.
-    """
+def inner_wrapper_target(factory_path: str | None) -> InnerWrapperTarget | None:
+    """Recover an inner wrapper's emitted helper contract from its source."""
     if not factory_path:
         return None
-    from hyper_parallel.distributed.expert_parallel.archetypes import (  # pylint: disable=C0415
-        moe_archetypes,
+    module_name, _, factory_name = factory_path.rpartition(".")
+    if not module_name or not factory_name:
+        return None
+    tree = _module_source_tree(module_name)
+    if tree is None:
+        return None
+    factory_node = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == factory_name
+        ),
+        None,
+    )
+    if factory_node is None:
+        return None
+    request_owner = _request_owner(factory_node, tree)
+    replacement_name = (
+        _rewrite_request_callable(request_owner)
+        if request_owner is not None
+        else None
+    )
+    helper_name = (
+        _forward_helper_name(request_owner, replacement_name)
+        if request_owner is not None and replacement_name
+        else None
+    )
+    module_functions = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    if not helper_name or helper_name not in module_functions:
+        inline_body = _nested_forward_body(request_owner, replacement_name)
+        if inline_body is None:
+            return None
+        return InnerWrapperTarget(inline_body=inline_body)
+    return InnerWrapperTarget(
+        helper_module=module_name,
+        helper_name=helper_name,
+        state_attr=_cp_mesh_companion_attr(tree),
     )
 
-    for archetype in moe_archetypes().values():
-        if archetype.compute_factory == factory_path:
-            return archetype
+
+def _request_owner(factory_node: ast.AST, tree: ast.Module) -> ast.AST | None:
+    """Return the factory or its module-level delegate that builds the request."""
+    if _rewrite_request_callable(factory_node) is not None:
+        return factory_node
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for node in ast.walk(factory_node):
+        if not isinstance(node, ast.Return) or not isinstance(node.value, ast.Call):
+            continue
+        if not isinstance(node.value.func, ast.Name):
+            continue
+        delegate = functions.get(node.value.func.id)
+        if delegate is not None and _rewrite_request_callable(delegate) is not None:
+            return delegate
+    return None
+
+
+def _module_source_tree(module_name: str) -> ast.Module | None:
+    """Load a module's source AST without importing optional accelerator deps."""
+    relative = os.path.join(*module_name.split(".")) + ".py"
+    for root in sys.path:
+        path = os.path.join(root or os.curdir, relative)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return ast.parse(handle.read())
+        except (OSError, SyntaxError, UnicodeError):
+            return None
+    return None
+
+
+def _rewrite_request_callable(tree: ast.AST) -> str | None:
+    """Return the replacement callable passed to ``_ForwardRewriteRequest``."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id == "_ForwardRewriteRequest" and len(node.args) >= 2:
+            if isinstance(node.args[1], ast.Name):
+                return node.args[1].id
+    return None
+
+
+def _forward_helper_name(tree: ast.AST, replacement_name: str) -> str | None:
+    """Return the module-level helper called by the replacement forward."""
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != replacement_name:
+            continue
+        for child in ast.walk(node):
+            if isinstance(child, ast.Return) and isinstance(child.value, ast.Call):
+                if isinstance(child.value.func, ast.Name):
+                    return child.value.func.id
+    return None
+
+
+def _cp_mesh_companion_attr(tree: ast.AST) -> str | None:
+    """Return the companion attribute whose value is the wrapper's CP mesh."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.keyword) or node.arg != "companion_attrs":
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Name)
+                and value.id == "cp_mesh"
+            ):
+                return key.value
+    return None
+
+
+def _nested_forward_body(tree: ast.AST, replacement_name: str | None) -> str | None:
+    """Lower a closure-backed rewrite into an imported-host dispatch body.
+
+    A custom wrapper may build its replacement forward as a nested closure
+    instead of delegating to a module-level helper.  The closure remains
+    source-visible when its captured values are also published through the
+    request's ``companion_attrs`` mapping.  In that form, replace captured
+    state reads with instance attributes and the saved original forward with
+    ``super().forward``; the imported-host materializer supplies the subclass.
+    """
+    if not replacement_name:
+        return None
+    forward = next(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == replacement_name
+        ),
+        None,
+    )
+    if forward is None:
+        return None
+    companion_attrs = _companion_attr_bindings(tree)
+    original_forward = _original_forward_binding(tree)
+    if original_forward is None:
+        return None
+
+    class ClosureBindings(ast.NodeTransformer):
+        """Rewrite captured closure bindings to generated-instance state."""
+
+        def visit_Name(self, node: ast.Name) -> ast.AST:  # pylint: disable=invalid-name
+            """Rewrite a referenced symbol into its resolved source form."""
+            attr = companion_attrs.get(node.id)
+            if attr is None:
+                return node
+            return ast.copy_location(
+                ast.Attribute(
+                    value=ast.Name(id="self", ctx=ast.Load()),
+                    attr=attr,
+                    ctx=node.ctx,
+                ),
+                node,
+            )
+
+        def visit_Call(self, node: ast.Call) -> ast.AST:  # pylint: disable=invalid-name
+            """Rewrite a call after recursively resolving its arguments."""
+            node = self.generic_visit(node)
+            if isinstance(node.func, ast.Name) and node.func.id == original_forward:
+                node.func = ast.Attribute(
+                    value=ast.Call(
+                        func=ast.Name(id="super", ctx=ast.Load()),
+                        args=[],
+                        keywords=[],
+                    ),
+                    attr="forward",
+                    ctx=ast.Load(),
+                )
+            return node
+
+    body = list(forward.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    lowered = [ClosureBindings().visit(ast.fix_missing_locations(node)) for node in body]
+    if not lowered:
+        return None
+    active = "\n".join(ast.unparse(node) for node in lowered)
+    return (
+        "if self.cp_enable:\n"
+        f"{textwrap.indent(active, '    ')}\n\n"
+        "return self._forward_impl(__hp_forward_args__)"
+    )
+
+
+def _companion_attr_bindings(tree: ast.AST) -> dict[str, str]:
+    """Map closure variable names to their published companion attributes."""
+    result: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.keyword) or node.arg != "companion_attrs":
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Name)
+            ):
+                result[value.id] = key.value
+    return result
+
+
+def _original_forward_binding(tree: ast.AST) -> str | None:
+    """Return the local name that saves ``target.forward`` before rewriting."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Attribute)
+            and value.attr == "forward"
+        ):
+            return target.id
     return None
 
 
 __all__ = [
+    "InnerWrapperTarget",
     "ReplacementArgument",
     "ReplacementTarget",
     "adapter_path_parts",
-    "archetype_for_factory",
     "class_name_of",
     "family_from_target",
+    "inner_wrapper_target",
     "replacement_target",
 ]

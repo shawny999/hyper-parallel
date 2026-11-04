@@ -57,6 +57,7 @@ def build_replacement_patches(rules: tuple[InlineRule, ...], model_type: str | N
 
     patch_set = InlinePatchSet()
     scopes_by_target: dict[str, set[str]] = defaultdict(set)
+    fqns_by_target: dict[str, set[str]] = defaultdict(set)
     specs_by_target: dict[str, Any] = {}
     for rule in rules:
         target = rule.replace_target
@@ -67,6 +68,7 @@ def build_replacement_patches(rules: tuple[InlineRule, ...], model_type: str | N
             continue
         specs_by_target.setdefault(target, spec)
         scopes_by_target[target].update(_scope_attrs(rule))
+        fqns_by_target[target].update(fqn for fqn in rule.match if fqn)
     for target, spec in specs_by_target.items():
         scope_attrs = tuple(sorted(scopes_by_target[target]))
         if not scope_attrs:
@@ -88,6 +90,7 @@ def build_replacement_patches(rules: tuple[InlineRule, ...], model_type: str | N
                 mode=spec.mode,  # type: ignore[arg-type]
                 keyword_args=spec.keyword_args,
                 scope_attrs=scope_attrs,
+                scope_fqns=tuple(sorted(fqns_by_target[target])),
             )
         )
         if spec.remove_class:
