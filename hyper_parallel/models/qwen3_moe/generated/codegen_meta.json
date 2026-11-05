@@ -3,39 +3,214 @@
     "lm_head": "Linear",
     "model.embed_tokens": "Embedding",
     "model.layers.0.input_layernorm": "RMSNorm",
+    "model.layers.0.mlp": "Qwen3MoeSparseMoeBlock",
     "model.layers.0.post_attention_layernorm": "RMSNorm",
     "model.layers.0.self_attn": "GQAAttention",
     "model.layers.0.self_attn.k_norm": "Qwen3MoeRMSNorm",
     "model.layers.0.self_attn.q_norm": "Qwen3MoeRMSNorm",
     "model.layers.1.input_layernorm": "RMSNorm",
+    "model.layers.1.mlp": "Qwen3MoeSparseMoeBlock",
     "model.layers.1.post_attention_layernorm": "RMSNorm",
     "model.layers.1.self_attn": "GQAAttention",
     "model.layers.1.self_attn.k_norm": "Qwen3MoeRMSNorm",
     "model.layers.1.self_attn.q_norm": "Qwen3MoeRMSNorm",
     "model.layers.2.input_layernorm": "RMSNorm",
+    "model.layers.2.mlp": "Qwen3MoeSparseMoeBlock",
     "model.layers.2.post_attention_layernorm": "RMSNorm",
     "model.layers.2.self_attn": "GQAAttention",
     "model.layers.2.self_attn.k_norm": "Qwen3MoeRMSNorm",
     "model.layers.2.self_attn.q_norm": "Qwen3MoeRMSNorm",
     "model.layers.3.input_layernorm": "RMSNorm",
+    "model.layers.3.mlp": "Qwen3MoeSparseMoeBlock",
     "model.layers.3.post_attention_layernorm": "RMSNorm",
     "model.layers.3.self_attn": "GQAAttention",
     "model.layers.3.self_attn.k_norm": "Qwen3MoeRMSNorm",
     "model.layers.3.self_attn.q_norm": "Qwen3MoeRMSNorm",
     "model.norm": "RMSNorm"
   },
-  "codegen_version": "0.1.1",
+  "boundary_types": {
+    "lm_head": "torch.nn.modules.linear:Linear",
+    "model.embed_tokens": "torch.nn.modules.sparse:Embedding",
+    "model.layers.0.input_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.0.mlp": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+    "model.layers.0.post_attention_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.0.self_attn": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+    "model.layers.0.self_attn.k_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.0.self_attn.q_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.1.input_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.1.mlp": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+    "model.layers.1.post_attention_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.1.self_attn": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+    "model.layers.1.self_attn.k_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.1.self_attn.q_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.2.input_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.2.mlp": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+    "model.layers.2.post_attention_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.2.self_attn": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+    "model.layers.2.self_attn.k_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.2.self_attn.q_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.3.input_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.3.mlp": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+    "model.layers.3.post_attention_layernorm": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+    "model.layers.3.self_attn": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+    "model.layers.3.self_attn.k_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.layers.3.self_attn.q_norm": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+    "model.norm": "hyper_parallel.components.modules.rms_norm:RMSNorm"
+  },
+  "codegen_version": "0.1.2",
   "covered": {
     "axes": [],
-    "module_overrides": true,
+    "model_class": false,
+    "module_overrides": false,
     "sharding_plan": true
   },
-  "entrypoints": {
-    "parallelize": "hp_parallelize"
+  "emission_patches": {
+    "inner_wrappers": [
+      {
+        "module_fqn": "model.layers.0.self_attn",
+        "target_fqn": "self",
+        "target_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "wrapper": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel:qwen3_moe_flash_attention_cp_mask_wrapper"
+      },
+      {
+        "module_fqn": "model.layers.1.self_attn",
+        "target_fqn": "self",
+        "target_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "wrapper": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel:qwen3_moe_flash_attention_cp_mask_wrapper"
+      },
+      {
+        "module_fqn": "model.layers.2.self_attn",
+        "target_fqn": "self",
+        "target_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "wrapper": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel:qwen3_moe_flash_attention_cp_mask_wrapper"
+      },
+      {
+        "module_fqn": "model.layers.3.self_attn",
+        "target_fqn": "self",
+        "target_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "wrapper": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel:qwen3_moe_flash_attention_cp_mask_wrapper"
+      }
+    ],
+    "local_computes": [
+      {
+        "factory": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel:qwen3moe_ep_compute_fn",
+        "module_fqn": "model.layers.0.mlp",
+        "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+        "original_forward": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock.forward",
+        "region_dispatch": false
+      },
+      {
+        "factory": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel:qwen3moe_ep_compute_fn",
+        "module_fqn": "model.layers.1.mlp",
+        "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+        "original_forward": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock.forward",
+        "region_dispatch": false
+      },
+      {
+        "factory": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel:qwen3moe_ep_compute_fn",
+        "module_fqn": "model.layers.2.mlp",
+        "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+        "original_forward": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock.forward",
+        "region_dispatch": false
+      },
+      {
+        "factory": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel:qwen3moe_ep_compute_fn",
+        "module_fqn": "model.layers.3.mlp",
+        "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock",
+        "original_forward": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeSparseMoeBlock.forward",
+        "region_dispatch": false
+      }
+    ],
+    "module_replacements": [
+      {
+        "module_fqn": "model.layers.0.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.0.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.1.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.1.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.2.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.2.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.3.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.3.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.norm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention"
+      },
+      {
+        "module_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention"
+      },
+      {
+        "module_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention"
+      },
+      {
+        "module_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention"
+      },
+      {
+        "module_fqn": "model.layers.0.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts"
+      },
+      {
+        "module_fqn": "model.layers.1.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts"
+      },
+      {
+        "module_fqn": "model.layers.2.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts"
+      },
+      {
+        "module_fqn": "model.layers.3.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts"
+      }
+    ]
   },
-  "external_state_classes": [
-    "Qwen3MoeSparseMoeBlock"
-  ],
+  "entrypoints": {},
+  "external_state_classes": [],
   "frozen_sharded_params": [
     "lm_head.weight",
     "model.embed_tokens.weight",
@@ -61,44 +236,7 @@
       "ep_size": 2,
       "local_compute_fn": {
         "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
-        "use_grouped_gemm": true
-      },
-      "match": "model.layers.3.mlp"
-    },
-    {
-      "inner_target": "self",
-      "inner_wrapper": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_wrapper"
-      },
-      "match": "model.layers.0.self_attn"
-    },
-    {
-      "ep_size": 2,
-      "local_compute_fn": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
-        "use_grouped_gemm": true
-      },
-      "match": "model.layers.1.mlp"
-    },
-    {
-      "inner_target": "self",
-      "inner_wrapper": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_wrapper"
-      },
-      "match": "model.layers.3.self_attn"
-    },
-    {
-      "ep_size": 2,
-      "local_compute_fn": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
-        "use_grouped_gemm": true
-      },
-      "match": "model.layers.2.mlp"
-    },
-    {
-      "ep_size": 2,
-      "local_compute_fn": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+        "fix_router": false,
         "use_grouped_gemm": true
       },
       "match": "model.layers.0.mlp"
@@ -106,16 +244,209 @@
     {
       "inner_target": "self",
       "inner_wrapper": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_wrapper"
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
       },
-      "match": "model.layers.1.self_attn"
+      "match": "model.layers.0.self_attn"
+    },
+    {
+      "ep_size": 2,
+      "local_compute_fn": {
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+        "fix_router": false,
+        "use_grouped_gemm": true
+      },
+      "match": "model.layers.1.mlp"
     },
     {
       "inner_target": "self",
       "inner_wrapper": {
-        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_wrapper"
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+      },
+      "match": "model.layers.1.self_attn"
+    },
+    {
+      "ep_size": 2,
+      "local_compute_fn": {
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+        "fix_router": false,
+        "use_grouped_gemm": true
+      },
+      "match": "model.layers.2.mlp"
+    },
+    {
+      "inner_target": "self",
+      "inner_wrapper": {
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
       },
       "match": "model.layers.2.self_attn"
+    },
+    {
+      "ep_size": 2,
+      "local_compute_fn": {
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+        "fix_router": false,
+        "use_grouped_gemm": true
+      },
+      "match": "model.layers.3.mlp"
+    },
+    {
+      "inner_target": "self",
+      "inner_wrapper": {
+        "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+      },
+      "match": "model.layers.3.self_attn"
+    }
+  ],
+  "materialized_patches": [
+    {
+      "fqn": "model.layers.0.mlp",
+      "host_class": "Qwen3MoeSparseMoeBlock",
+      "kind": "local_compute",
+      "source_form": "same_class_toggle_forward"
+    },
+    {
+      "fqn": "model.layers.1.mlp",
+      "host_class": "Qwen3MoeSparseMoeBlock",
+      "kind": "local_compute",
+      "source_form": "same_class_toggle_forward"
+    },
+    {
+      "fqn": "model.layers.2.mlp",
+      "host_class": "Qwen3MoeSparseMoeBlock",
+      "kind": "local_compute",
+      "source_form": "same_class_toggle_forward"
+    },
+    {
+      "fqn": "model.layers.3.mlp",
+      "host_class": "Qwen3MoeSparseMoeBlock",
+      "kind": "local_compute",
+      "source_form": "same_class_toggle_forward"
+    },
+    {
+      "fqn": "model.layers.0.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.norm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.mlp.experts",
+      "host_class": "GroupedExperts",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.mlp.experts",
+      "host_class": "GroupedExperts",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.mlp.experts",
+      "host_class": "GroupedExperts",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.mlp.experts",
+      "host_class": "GroupedExperts",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "inner_wrapper",
+      "source_form": "replacement_forward_runtime_binding"
+    },
+    {
+      "fqn": "model.layers.1.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "inner_wrapper",
+      "source_form": "replacement_forward_runtime_binding"
+    },
+    {
+      "fqn": "model.layers.2.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "inner_wrapper",
+      "source_form": "replacement_forward_runtime_binding"
+    },
+    {
+      "fqn": "model.layers.3.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "inner_wrapper",
+      "source_form": "replacement_forward_runtime_binding"
     }
   ],
   "mesh_dim_names": [
@@ -127,7 +458,7 @@
   "module_overrides": [
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.0.input_layernorm",
       "fqns": [
         "model.layers.0.input_layernorm"
@@ -137,11 +468,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.0.post_attention_layernorm",
       "fqns": [
         "model.layers.0.post_attention_layernorm"
@@ -151,11 +483,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.1.input_layernorm",
       "fqns": [
         "model.layers.1.input_layernorm"
@@ -165,11 +498,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.1.post_attention_layernorm",
       "fqns": [
         "model.layers.1.post_attention_layernorm"
@@ -179,11 +513,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.2.input_layernorm",
       "fqns": [
         "model.layers.2.input_layernorm"
@@ -193,11 +528,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.2.post_attention_layernorm",
       "fqns": [
         "model.layers.2.post_attention_layernorm"
@@ -207,11 +543,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.3.input_layernorm",
       "fqns": [
         "model.layers.3.input_layernorm"
@@ -221,11 +558,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.layers.3.post_attention_layernorm",
       "fqns": [
         "model.layers.3.post_attention_layernorm"
@@ -235,11 +573,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
       "fqn": "model.norm",
       "fqns": [
         "model.norm"
@@ -249,11 +588,12 @@
         "*.post_attention_layernorm",
         "model.norm"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeRMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention",
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
       "fqn": "model.layers.0.self_attn",
       "fqns": [
         "model.layers.0.self_attn"
@@ -261,11 +601,12 @@
       "match": [
         "*.self_attn"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention",
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
       "fqn": "model.layers.1.self_attn",
       "fqns": [
         "model.layers.1.self_attn"
@@ -273,11 +614,12 @@
       "match": [
         "*.self_attn"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention",
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
       "fqn": "model.layers.2.self_attn",
       "fqns": [
         "model.layers.2.self_attn"
@@ -285,11 +627,12 @@
       "match": [
         "*.self_attn"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention",
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
       "fqn": "model.layers.3.self_attn",
       "fqns": [
         "model.layers.3.self_attn"
@@ -297,11 +640,12 @@
       "match": [
         "*.self_attn"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeAttention",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts",
+      "factory": "hyper_parallel.components.modules.grouped_experts.GroupedExperts",
       "fqn": "model.layers.0.mlp.experts",
       "fqns": [
         "model.layers.0.mlp.experts"
@@ -309,11 +653,12 @@
       "match": [
         "*.mlp.experts"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts",
+      "factory": "hyper_parallel.components.modules.grouped_experts.GroupedExperts",
       "fqn": "model.layers.1.mlp.experts",
       "fqns": [
         "model.layers.1.mlp.experts"
@@ -321,11 +666,12 @@
       "match": [
         "*.mlp.experts"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts",
+      "factory": "hyper_parallel.components.modules.grouped_experts.GroupedExperts",
       "fqn": "model.layers.2.mlp.experts",
       "fqns": [
         "model.layers.2.mlp.experts"
@@ -333,11 +679,12 @@
       "match": [
         "*.mlp.experts"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts"
     },
     {
       "exact_type": false,
-      "factory": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts",
+      "factory": "hyper_parallel.components.modules.grouped_experts.GroupedExperts",
       "fqn": "model.layers.3.mlp.experts",
       "fqns": [
         "model.layers.3.mlp.experts"
@@ -345,9 +692,11 @@
       "match": [
         "*.mlp.experts"
       ],
-      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts"
+      "module_type": "transformers.models.qwen3_moe.modeling_qwen3_moe.Qwen3MoeExperts",
+      "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts"
     }
   ],
+  "nested_components": [],
   "not_covered": [
     "mesh",
     "fsdp2",
@@ -357,21 +706,21 @@
   ],
   "outputs": {
     "diff": {
-      "lines": 400,
-      "sha256": "5a90c1bf6eabb3581870c37e0f4ed67cf3f239943f3797b3474c256ae41ed6b3"
+      "lines": 430,
+      "sha256": "5fd4464ffbd62498510a7bed276b9c024ab4eed01cf1597d53d9902a03dde370"
     },
     "init": {
-      "lines": 6,
-      "sha256": "5ce77ce41abbf524fe03ad49c99578bd44446913ce8d64a312aeda3e8c52784b"
+      "lines": 20,
+      "sha256": "8ca2946a77bf9978e4e25a7969ce051820f2c51edc7b9f5de74e4bce76273edf"
     },
     "modeling": {
-      "lines": 971,
-      "sha256": "55fc0f986a4fbe885b00d1097d892ac447a7640851bf4334836730e57c9bc75a"
+      "lines": 986,
+      "sha256": "b85604a9e428cfa3f9a3f94f248ec9aafe44fde096b4f736d1a9b780b0125f51"
     }
   },
   "parallel_dims": {
     "cp_size": 2,
-    "dp_size": 2,
+    "dp_size": 1,
     "ep_size": 2,
     "loss_parallel": true,
     "pp_size": 1,
@@ -508,7 +857,7 @@
           "tp": "S(1)"
         }
       },
-      "is_boundary": false,
+      "is_boundary": true,
       "out_dst": {
         "output": {
           "cp": "S(1)",
@@ -538,7 +887,8 @@
           "tp": "R"
         }
       },
-      "region_dispatch": false
+      "region_dispatch": false,
+      "skip_source_lowering": true
     },
     "model.layers.0.post_attention_layernorm": {
       "in_dst": {
@@ -751,7 +1101,7 @@
           "tp": "S(1)"
         }
       },
-      "is_boundary": false,
+      "is_boundary": true,
       "out_dst": {
         "output": {
           "cp": "S(1)",
@@ -781,7 +1131,8 @@
           "tp": "R"
         }
       },
-      "region_dispatch": false
+      "region_dispatch": false,
+      "skip_source_lowering": true
     },
     "model.layers.1.post_attention_layernorm": {
       "in_dst": {
@@ -994,7 +1345,7 @@
           "tp": "S(1)"
         }
       },
-      "is_boundary": false,
+      "is_boundary": true,
       "out_dst": {
         "output": {
           "cp": "S(1)",
@@ -1024,7 +1375,8 @@
           "tp": "R"
         }
       },
-      "region_dispatch": false
+      "region_dispatch": false,
+      "skip_source_lowering": true
     },
     "model.layers.2.post_attention_layernorm": {
       "in_dst": {
@@ -1237,7 +1589,7 @@
           "tp": "S(1)"
         }
       },
-      "is_boundary": false,
+      "is_boundary": true,
       "out_dst": {
         "output": {
           "cp": "S(1)",
@@ -1267,7 +1619,8 @@
           "tp": "R"
         }
       },
-      "region_dispatch": false
+      "region_dispatch": false,
+      "skip_source_lowering": true
     },
     "model.layers.3.post_attention_layernorm": {
       "in_dst": {
@@ -1466,32 +1819,409 @@
       }
     }
   },
+  "plan_application": {
+    "applied_boundaries": [
+      "lm_head",
+      "model.embed_tokens",
+      "model.layers.0.input_layernorm",
+      "model.layers.0.mlp",
+      "model.layers.0.post_attention_layernorm",
+      "model.layers.0.self_attn",
+      "model.layers.0.self_attn.k_norm",
+      "model.layers.0.self_attn.q_norm",
+      "model.layers.1.input_layernorm",
+      "model.layers.1.mlp",
+      "model.layers.1.post_attention_layernorm",
+      "model.layers.1.self_attn",
+      "model.layers.1.self_attn.k_norm",
+      "model.layers.1.self_attn.q_norm",
+      "model.layers.2.input_layernorm",
+      "model.layers.2.mlp",
+      "model.layers.2.post_attention_layernorm",
+      "model.layers.2.self_attn",
+      "model.layers.2.self_attn.k_norm",
+      "model.layers.2.self_attn.q_norm",
+      "model.layers.3.input_layernorm",
+      "model.layers.3.mlp",
+      "model.layers.3.post_attention_layernorm",
+      "model.layers.3.self_attn",
+      "model.layers.3.self_attn.k_norm",
+      "model.layers.3.self_attn.q_norm",
+      "model.norm"
+    ],
+    "ep_bindings": [
+      {
+        "ep_size": 2,
+        "ep_stack": {},
+        "fqn": "model.layers.0.mlp",
+        "inner_target": null,
+        "inner_wrapper": null,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        }
+      },
+      {
+        "ep_size": 2,
+        "ep_stack": {},
+        "fqn": "model.layers.1.mlp",
+        "inner_target": null,
+        "inner_wrapper": null,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        }
+      },
+      {
+        "ep_size": 2,
+        "ep_stack": {},
+        "fqn": "model.layers.2.mlp",
+        "inner_target": null,
+        "inner_wrapper": null,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        }
+      },
+      {
+        "ep_size": 2,
+        "ep_stack": {},
+        "fqn": "model.layers.3.mlp",
+        "inner_target": null,
+        "inner_wrapper": null,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        }
+      }
+    ],
+    "resolved_injections": [
+      {
+        "ep_size": 2,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        },
+        "match": "model.layers.0.mlp"
+      },
+      {
+        "inner_target": "self",
+        "inner_wrapper": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+        },
+        "match": "model.layers.0.self_attn"
+      },
+      {
+        "ep_size": 2,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        },
+        "match": "model.layers.1.mlp"
+      },
+      {
+        "inner_target": "self",
+        "inner_wrapper": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+        },
+        "match": "model.layers.1.self_attn"
+      },
+      {
+        "ep_size": 2,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        },
+        "match": "model.layers.2.mlp"
+      },
+      {
+        "inner_target": "self",
+        "inner_wrapper": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+        },
+        "match": "model.layers.2.self_attn"
+      },
+      {
+        "ep_size": 2,
+        "local_compute_fn": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.expert_parallel.qwen3moe_ep_compute_fn",
+          "fix_router": false,
+          "use_grouped_gemm": true
+        },
+        "match": "model.layers.3.mlp"
+      },
+      {
+        "inner_target": "self",
+        "inner_wrapper": {
+          "_target_": "hyper_parallel.models.qwen3_moe.adapter.distributed.context_parallel.qwen3_moe_flash_attention_cp_mask_wrapper"
+        },
+        "match": "model.layers.3.self_attn"
+      }
+    ],
+    "resolved_wrappers": [],
+    "source_shard_info": {},
+    "special_handlers": {},
+    "tied_pairs": [],
+    "validate_mode": false
+  },
   "remote_siblings": [],
-  "signature": "6d545abdcbd7",
+  "signature": "d8ab71c50c7f",
   "skipped_overrides": [],
+  "snapshot_replacements": {
+    "applications": [
+      {
+        "module_fqns": [
+          "model.layers.0.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.0.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.0.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.1.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.1.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.2.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.2.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.3.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.3.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.norm"
+        ],
+        "primary_fqn": "model.norm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeRMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.self_attn"
+        ],
+        "primary_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.self_attn"
+        ],
+        "primary_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.self_attn"
+        ],
+        "primary_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.self_attn"
+        ],
+        "primary_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeAttention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.mlp.experts"
+        ],
+        "primary_fqn": "model.layers.0.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.mlp.experts"
+        ],
+        "primary_fqn": "model.layers.1.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.mlp.experts"
+        ],
+        "primary_fqn": "model.layers.2.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.mlp.experts"
+        ],
+        "primary_fqn": "model.layers.3.mlp.experts",
+        "replacement_type": "hyper_parallel.components.modules.grouped_experts:GroupedExperts",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeExperts",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      }
+    ],
+    "declarations": [
+      {
+        "exact_type": false,
+        "match": [
+          "*.input_layernorm",
+          "*.post_attention_layernorm",
+          "model.norm"
+        ],
+        "order": 0,
+        "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_rms_norm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": null,
+        "static_arguments": {}
+      },
+      {
+        "exact_type": false,
+        "match": [
+          "*.self_attn"
+        ],
+        "order": 1,
+        "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_flash_attention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": null,
+        "static_arguments": {}
+      },
+      {
+        "exact_type": false,
+        "match": [
+          "*.mlp.experts"
+        ],
+        "order": 2,
+        "replacement_target": "hyper_parallel.models.qwen3_moe.adapter.conversion.module_replacement.replace_qwen3_moe_grouped_experts",
+        "rule_id": "plan_override:2:replace",
+        "source_type": null,
+        "static_arguments": {}
+      }
+    ],
+    "unmatched": []
+  },
+  "snapshot_schema_version": 1,
+  "snapshot_status": "derived",
   "source": {
     "architecture": "Qwen3MoeForCausalLM",
-    "file_path": "transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+    "architectures": [],
+    "file_path": "/home/lxy/miniforge3/envs/hyper_restructure_py311/lib/python3.11/site-packages/transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+    "is_hf_model": true,
     "line_count": 731,
-    "model_id": "qwen3_30b_a3b_4L",
+    "model_class": "transformers.models.qwen3_moe.modeling_qwen3_moe:Qwen3MoeForCausalLM",
     "model_type": "qwen3_moe",
     "module_name": "transformers.models.qwen3_moe.modeling_qwen3_moe",
-    "sha256": "f07ab1b3a17e27612006a447812b83667af7ab3d527afe3ebbdf89dc5dac8a90",
-    "structure": {
-      "hidden_size": 2048,
-      "intermediate_size": 6144,
-      "moe_intermediate_size": 768,
-      "num_attention_heads": 32,
-      "num_experts": 128,
-      "num_experts_per_tok": 8,
-      "num_hidden_layers": 4,
-      "num_key_value_heads": 4,
-      "num_local_experts": 128
-    },
-    "transformers_version": "5.14.1"
+    "pretrained_model_name_or_path": null,
+    "sha256": "f07ab1b3a17e27612006a447812b83667af7ab3d527afe3ebbdf89dc5dac8a90"
   },
   "special_handlers": {},
   "tied_pairs": [],
-  "yaml_path": "examples/training_demo/qwen3_moe/train_parallel_offline_codegen.yaml",
-  "yaml_sha256": "2557784b26ad9d5fcdb226fde356466141bc0f98f3e66d590717d220e0d63ead"
+  "yaml_path": "",
+  "yaml_sha256": "d8ab71c50c7f96151c895042bdf2b8fa4a31984960173f06d35559ade224afab"
 }

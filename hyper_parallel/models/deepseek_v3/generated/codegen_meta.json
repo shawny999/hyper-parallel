@@ -1,0 +1,1515 @@
+{
+  "boundary_classes": {
+    "lm_head": "Linear",
+    "model.embed_tokens": "Embedding",
+    "model.layers.0.input_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.0.mlp": "DeepseekV3MLP",
+    "model.layers.0.post_attention_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.0.self_attn": "MLAAttention",
+    "model.layers.0.self_attn.kv_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.0.self_attn.q_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.1.input_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.1.mlp": "DeepseekV3MLP",
+    "model.layers.1.post_attention_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.1.self_attn": "MLAAttention",
+    "model.layers.1.self_attn.kv_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.1.self_attn.q_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.2.input_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.2.mlp": "DeepseekV3MLP",
+    "model.layers.2.post_attention_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.2.self_attn": "MLAAttention",
+    "model.layers.2.self_attn.kv_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.2.self_attn.q_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.3.input_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.3.mlp": "DeepseekV3MoE",
+    "model.layers.3.mlp.shared_experts": "DeepseekV3MLP",
+    "model.layers.3.post_attention_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.3.self_attn": "MLAAttention",
+    "model.layers.3.self_attn.kv_a_layernorm": "DeepseekV3RMSNorm",
+    "model.layers.3.self_attn.q_a_layernorm": "DeepseekV3RMSNorm",
+    "model.norm": "DeepseekV3RMSNorm"
+  },
+  "boundary_types": {
+    "lm_head": "torch.nn.modules.linear:Linear",
+    "model.embed_tokens": "torch.nn.modules.sparse:Embedding",
+    "model.layers.0.input_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.0.mlp": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3MLP",
+    "model.layers.0.post_attention_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.0.self_attn": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+    "model.layers.0.self_attn.kv_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.0.self_attn.q_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.1.input_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.1.mlp": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3MLP",
+    "model.layers.1.post_attention_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.1.self_attn": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+    "model.layers.1.self_attn.kv_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.1.self_attn.q_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.2.input_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.2.mlp": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3MLP",
+    "model.layers.2.post_attention_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.2.self_attn": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+    "model.layers.2.self_attn.kv_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.2.self_attn.q_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.3.input_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.3.mlp": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3MoE",
+    "model.layers.3.mlp.shared_experts": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3MLP",
+    "model.layers.3.post_attention_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.3.self_attn": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+    "model.layers.3.self_attn.kv_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.layers.3.self_attn.q_a_layernorm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm",
+    "model.norm": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3RMSNorm"
+  },
+  "codegen_version": "0.1.2",
+  "covered": {
+    "axes": [],
+    "model_class": false,
+    "module_overrides": false,
+    "sharding_plan": true
+  },
+  "emission_patches": {
+    "inner_wrappers": [],
+    "local_computes": [],
+    "module_replacements": [
+      {
+        "module_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention"
+      },
+      {
+        "module_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention"
+      },
+      {
+        "module_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention"
+      },
+      {
+        "module_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention"
+      }
+    ]
+  },
+  "entrypoints": {},
+  "external_state_classes": [],
+  "frozen_sharded_params": [
+    "model.layers.3.mlp.experts.down_proj",
+    "model.layers.3.mlp.experts.gate_up_proj"
+  ],
+  "injections": [
+    {
+      "ep_size": 8,
+      "match": "model.layers.3.mlp"
+    }
+  ],
+  "materialized_patches": [
+    {
+      "fqn": "model.layers.0.self_attn",
+      "host_class": "MLAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.self_attn",
+      "host_class": "MLAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.self_attn",
+      "host_class": "MLAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.self_attn",
+      "host_class": "MLAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    }
+  ],
+  "mesh_dim_names": null,
+  "model_class": "DeepseekV3ForCausalLM",
+  "model_name": "Deepseek_V3",
+  "module_overrides": [
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "fqn": "model.layers.0.self_attn",
+      "fqns": [
+        "model.layers.0.self_attn"
+      ],
+      "match": [
+        "model.layers.*.self_attn"
+      ],
+      "module_type": "transformers.models.deepseek_v3.modeling_deepseek_v3.DeepseekV3Attention",
+      "replacement_target": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "target_config": {
+        "attention_interface": "hyper_parallel.components.functional.npu_fusion_attention.npu_fusion_attention_forward",
+        "context": null,
+        "module_fqn": ""
+      }
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "fqn": "model.layers.1.self_attn",
+      "fqns": [
+        "model.layers.1.self_attn"
+      ],
+      "match": [
+        "model.layers.*.self_attn"
+      ],
+      "module_type": "transformers.models.deepseek_v3.modeling_deepseek_v3.DeepseekV3Attention",
+      "replacement_target": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "target_config": {
+        "attention_interface": "hyper_parallel.components.functional.npu_fusion_attention.npu_fusion_attention_forward",
+        "context": null,
+        "module_fqn": ""
+      }
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "fqn": "model.layers.2.self_attn",
+      "fqns": [
+        "model.layers.2.self_attn"
+      ],
+      "match": [
+        "model.layers.*.self_attn"
+      ],
+      "module_type": "transformers.models.deepseek_v3.modeling_deepseek_v3.DeepseekV3Attention",
+      "replacement_target": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "target_config": {
+        "attention_interface": "hyper_parallel.components.functional.npu_fusion_attention.npu_fusion_attention_forward",
+        "context": null,
+        "module_fqn": ""
+      }
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "fqn": "model.layers.3.self_attn",
+      "fqns": [
+        "model.layers.3.self_attn"
+      ],
+      "match": [
+        "model.layers.*.self_attn"
+      ],
+      "module_type": "transformers.models.deepseek_v3.modeling_deepseek_v3.DeepseekV3Attention",
+      "replacement_target": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+      "target_config": {
+        "attention_interface": "hyper_parallel.components.functional.npu_fusion_attention.npu_fusion_attention_forward",
+        "context": null,
+        "module_fqn": ""
+      }
+    }
+  ],
+  "nested_components": [],
+  "not_covered": [
+    "mesh",
+    "fsdp2",
+    "pp",
+    "activation_checkpoint",
+    "compile"
+  ],
+  "outputs": {
+    "diff": {
+      "lines": 89,
+      "sha256": "90f0d38a16aacce9aa3cbf4e310b763da09fdf8a1563a21f425cdabf9a683782"
+    },
+    "init": {
+      "lines": 20,
+      "sha256": "8ca2946a77bf9978e4e25a7969ce051820f2c51edc7b9f5de74e4bce76273edf"
+    },
+    "modeling": {
+      "lines": 744,
+      "sha256": "ddc01cf1e653d753dc6d38ccab374fc8152b420a72fbf3753f04274742a6864c"
+    }
+  },
+  "parallel_dims": {
+    "cp_size": 1,
+    "dp_size": 8,
+    "ep_size": 8,
+    "loss_parallel": false,
+    "pp_size": 1,
+    "sequence_parallel": false,
+    "tp_size": 1
+  },
+  "param_plan": {
+    "lm_head": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "S(-1)"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.embed_tokens": {
+      "in_dst": {
+        "input": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "input": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.input_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.mlp": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "down_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "gate_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "up_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.post_attention_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.self_attn": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "kv_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "linear_qkv.weight": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        },
+        "o_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "q_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.self_attn.kv_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.0.self_attn.q_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.input_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.mlp": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "down_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "gate_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "up_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.post_attention_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.self_attn": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "kv_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "linear_qkv.weight": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        },
+        "o_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "q_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.self_attn.kv_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.1.self_attn.q_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.input_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.mlp": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "down_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "gate_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "up_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.post_attention_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.self_attn": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "kv_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "linear_qkv.weight": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        },
+        "o_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "q_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.self_attn.kv_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.2.self_attn.q_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.input_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.mlp": {
+      "in_dst": {
+        "x_BLD": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "x_BLD": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "experts.down_proj": {
+          "cp": "R",
+          "ep": "S(0)"
+        },
+        "experts.gate_up_proj": {
+          "cp": "R",
+          "ep": "S(0)"
+        },
+        "gate.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.mlp.shared_experts": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "down_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "gate_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "up_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.post_attention_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.self_attn": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "P(sum)"
+        }
+      },
+      "params": {
+        "kv_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "linear_qkv.weight": {
+          "cp": "R",
+          "ep": "R",
+          "tp": "R"
+        },
+        "o_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        },
+        "q_b_proj.weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.self_attn.kv_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.layers.3.self_attn.q_a_layernorm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    },
+    "model.norm": {
+      "in_dst": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "in_src": {
+        "hidden_states": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "is_boundary": true,
+      "out_dst": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "out_src": {
+        "output": {
+          "cp": "S(1)",
+          "ep": "R",
+          "tp": "R"
+        }
+      },
+      "params": {
+        "weight": {
+          "cp": "R",
+          "ep": "R"
+        }
+      }
+    }
+  },
+  "plan_application": {
+    "applied_boundaries": [
+      "lm_head",
+      "model.embed_tokens",
+      "model.layers.0.input_layernorm",
+      "model.layers.0.mlp",
+      "model.layers.0.post_attention_layernorm",
+      "model.layers.0.self_attn",
+      "model.layers.0.self_attn.kv_a_layernorm",
+      "model.layers.0.self_attn.q_a_layernorm",
+      "model.layers.1.input_layernorm",
+      "model.layers.1.mlp",
+      "model.layers.1.post_attention_layernorm",
+      "model.layers.1.self_attn",
+      "model.layers.1.self_attn.kv_a_layernorm",
+      "model.layers.1.self_attn.q_a_layernorm",
+      "model.layers.2.input_layernorm",
+      "model.layers.2.mlp",
+      "model.layers.2.post_attention_layernorm",
+      "model.layers.2.self_attn",
+      "model.layers.2.self_attn.kv_a_layernorm",
+      "model.layers.2.self_attn.q_a_layernorm",
+      "model.layers.3.input_layernorm",
+      "model.layers.3.mlp",
+      "model.layers.3.mlp.shared_experts",
+      "model.layers.3.post_attention_layernorm",
+      "model.layers.3.self_attn",
+      "model.layers.3.self_attn.kv_a_layernorm",
+      "model.layers.3.self_attn.q_a_layernorm",
+      "model.norm"
+    ],
+    "ep_bindings": [
+      {
+        "ep_size": 8,
+        "ep_stack": {},
+        "fqn": "model.layers.3.mlp",
+        "inner_target": null,
+        "inner_wrapper": null,
+        "local_compute_fn": null
+      }
+    ],
+    "resolved_injections": [
+      {
+        "ep_size": 8,
+        "match": "model.layers.3.mlp"
+      }
+    ],
+    "resolved_wrappers": [],
+    "source_shard_info": {},
+    "special_handlers": {},
+    "tied_pairs": [],
+    "validate_mode": false
+  },
+  "remote_siblings": [],
+  "signature": "15cc3767d0a0",
+  "skipped_overrides": [],
+  "snapshot_replacements": {
+    "applications": [
+      {
+        "module_fqns": [
+          "model.layers.0.self_attn"
+        ],
+        "primary_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.self_attn"
+        ],
+        "primary_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.self_attn"
+        ],
+        "primary_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.self_attn"
+        ],
+        "primary_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.mla_attention:MLAAttention",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      }
+    ],
+    "declarations": [
+      {
+        "exact_type": false,
+        "match": [
+          "model.layers.*.self_attn"
+        ],
+        "order": 0,
+        "replacement_target": "hyper_parallel.components.modules.mla_attention.MLAAttention",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3Attention",
+        "static_arguments": {
+          "attention_interface": "hyper_parallel.components.functional.npu_fusion_attention.npu_fusion_attention_forward",
+          "context": null,
+          "module_fqn": ""
+        }
+      }
+    ],
+    "unmatched": []
+  },
+  "snapshot_schema_version": 1,
+  "snapshot_status": "derived",
+  "source": {
+    "architecture": "DeepseekV3ForCausalLM",
+    "architectures": [],
+    "file_path": "/home/lxy/miniforge3/envs/hyper_restructure_py311/lib/python3.11/site-packages/transformers/models/deepseek_v3/modeling_deepseek_v3.py",
+    "is_hf_model": true,
+    "line_count": 717,
+    "model_class": "transformers.models.deepseek_v3.modeling_deepseek_v3:DeepseekV3ForCausalLM",
+    "model_type": "deepseek_v3",
+    "module_name": "transformers.models.deepseek_v3.modeling_deepseek_v3",
+    "pretrained_model_name_or_path": "/home/lxy/probe_ckpts/deepseek_v3",
+    "sha256": "db49759b796e246021378da86a24ccc2515785c0f37c2b0bab9b1e9082d9d822"
+  },
+  "special_handlers": {},
+  "tied_pairs": [],
+  "yaml_path": "",
+  "yaml_sha256": "15cc3767d0a01a4dff940e7f62c605b2ff5074785c5609350102b36833883cf5"
+}

@@ -1,0 +1,744 @@
+{
+  "boundary_classes": {},
+  "boundary_types": {},
+  "codegen_version": "0.1.2",
+  "covered": {
+    "axes": [],
+    "model_class": false,
+    "module_overrides": false,
+    "sharding_plan": true
+  },
+  "emission_patches": {
+    "inner_wrappers": [],
+    "local_computes": [],
+    "module_replacements": [
+      {
+        "module_fqn": "model.layers.0.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.0.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.1.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.1.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.2.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.2.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.3.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.3.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.norm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm"
+      },
+      {
+        "module_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention"
+      },
+      {
+        "module_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention"
+      },
+      {
+        "module_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention"
+      },
+      {
+        "module_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention"
+      },
+      {
+        "module_fqn": "model.layers.0.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP"
+      },
+      {
+        "module_fqn": "model.layers.1.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP"
+      },
+      {
+        "module_fqn": "model.layers.2.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP"
+      },
+      {
+        "module_fqn": "model.layers.3.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP"
+      }
+    ]
+  },
+  "entrypoints": {},
+  "external_state_classes": [],
+  "frozen_sharded_params": [],
+  "injections": [],
+  "materialized_patches": [
+    {
+      "fqn": "model.layers.0.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.input_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.post_attention_layernorm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.norm",
+      "host_class": "RMSNorm",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.self_attn",
+      "host_class": "GQAAttention",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.0.mlp",
+      "host_class": "SwiGLUMLP",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.1.mlp",
+      "host_class": "SwiGLUMLP",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.2.mlp",
+      "host_class": "SwiGLUMLP",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    },
+    {
+      "fqn": "model.layers.3.mlp",
+      "host_class": "SwiGLUMLP",
+      "kind": "module_replacement",
+      "source_form": "constructor"
+    }
+  ],
+  "mesh_dim_names": null,
+  "model_class": "Qwen3ForCausalLM",
+  "model_name": "Qwen3",
+  "module_overrides": [
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.0.input_layernorm",
+      "fqns": [
+        "model.layers.0.input_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.0.post_attention_layernorm",
+      "fqns": [
+        "model.layers.0.post_attention_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.1.input_layernorm",
+      "fqns": [
+        "model.layers.1.input_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.1.post_attention_layernorm",
+      "fqns": [
+        "model.layers.1.post_attention_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.2.input_layernorm",
+      "fqns": [
+        "model.layers.2.input_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.2.post_attention_layernorm",
+      "fqns": [
+        "model.layers.2.post_attention_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.3.input_layernorm",
+      "fqns": [
+        "model.layers.3.input_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.layers.3.post_attention_layernorm",
+      "fqns": [
+        "model.layers.3.post_attention_layernorm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.rms_norm.RMSNorm",
+      "fqn": "model.norm",
+      "fqns": [
+        "model.norm"
+      ],
+      "match": [
+        "*.input_layernorm",
+        "*.post_attention_layernorm",
+        "model.norm"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
+      "fqn": "model.layers.0.self_attn",
+      "fqns": [
+        "model.layers.0.self_attn"
+      ],
+      "match": [
+        "*.self_attn"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3Attention",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_flash_attention"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
+      "fqn": "model.layers.1.self_attn",
+      "fqns": [
+        "model.layers.1.self_attn"
+      ],
+      "match": [
+        "*.self_attn"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3Attention",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_flash_attention"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
+      "fqn": "model.layers.2.self_attn",
+      "fqns": [
+        "model.layers.2.self_attn"
+      ],
+      "match": [
+        "*.self_attn"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3Attention",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_flash_attention"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.gqa_attention.GQAAttention",
+      "fqn": "model.layers.3.self_attn",
+      "fqns": [
+        "model.layers.3.self_attn"
+      ],
+      "match": [
+        "*.self_attn"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3Attention",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_flash_attention"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.swiglu_mlp.SwiGLUMLP",
+      "fqn": "model.layers.0.mlp",
+      "fqns": [
+        "model.layers.0.mlp"
+      ],
+      "match": [
+        "*.mlp"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3MLP",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_swiglu_mlp"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.swiglu_mlp.SwiGLUMLP",
+      "fqn": "model.layers.1.mlp",
+      "fqns": [
+        "model.layers.1.mlp"
+      ],
+      "match": [
+        "*.mlp"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3MLP",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_swiglu_mlp"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.swiglu_mlp.SwiGLUMLP",
+      "fqn": "model.layers.2.mlp",
+      "fqns": [
+        "model.layers.2.mlp"
+      ],
+      "match": [
+        "*.mlp"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3MLP",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_swiglu_mlp"
+    },
+    {
+      "exact_type": false,
+      "factory": "hyper_parallel.components.modules.swiglu_mlp.SwiGLUMLP",
+      "fqn": "model.layers.3.mlp",
+      "fqns": [
+        "model.layers.3.mlp"
+      ],
+      "match": [
+        "*.mlp"
+      ],
+      "module_type": "transformers.models.qwen3.modeling_qwen3.Qwen3MLP",
+      "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_swiglu_mlp"
+    }
+  ],
+  "nested_components": [],
+  "not_covered": [
+    "mesh",
+    "fsdp2",
+    "pp",
+    "activation_checkpoint",
+    "compile"
+  ],
+  "outputs": {
+    "diff": {
+      "lines": 372,
+      "sha256": "260a9f14beb35039ca821b6f2d3ef13bad6f8731becd594bafc9c5921f7895ba"
+    },
+    "init": {
+      "lines": 20,
+      "sha256": "8ca2946a77bf9978e4e25a7969ce051820f2c51edc7b9f5de74e4bce76273edf"
+    },
+    "modeling": {
+      "lines": 765,
+      "sha256": "5cf24d6fb82abef3cbd5507a1f1daefd3601b55834e0a0c455b1b0e65400799b"
+    }
+  },
+  "parallel_dims": {
+    "cp_size": 1,
+    "dp_size": 8,
+    "ep_size": 1,
+    "loss_parallel": false,
+    "pp_size": 1,
+    "sequence_parallel": false,
+    "tp_size": 1
+  },
+  "param_plan": {},
+  "plan_application": {
+    "resolved_injections": [],
+    "source_shard_info": {},
+    "validate_mode": false
+  },
+  "remote_siblings": [],
+  "signature": "ec16376019cd",
+  "skipped_overrides": [],
+  "snapshot_replacements": {
+    "applications": [
+      {
+        "module_fqns": [
+          "model.layers.0.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.0.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.0.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.1.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.1.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.2.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.2.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.input_layernorm"
+        ],
+        "primary_fqn": "model.layers.3.input_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.post_attention_layernorm"
+        ],
+        "primary_fqn": "model.layers.3.post_attention_layernorm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.norm"
+        ],
+        "primary_fqn": "model.norm",
+        "replacement_type": "hyper_parallel.components.modules.rms_norm:RMSNorm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "weight_transforms": []
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.self_attn"
+        ],
+        "primary_fqn": "model.layers.0.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.self_attn"
+        ],
+        "primary_fqn": "model.layers.1.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.self_attn"
+        ],
+        "primary_fqn": "model.layers.2.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.self_attn"
+        ],
+        "primary_fqn": "model.layers.3.self_attn",
+        "replacement_type": "hyper_parallel.components.modules.gqa_attention:GQAAttention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.0.mlp"
+        ],
+        "primary_fqn": "model.layers.0.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightRenaming"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.1.mlp"
+        ],
+        "primary_fqn": "model.layers.1.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightRenaming"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.2.mlp"
+        ],
+        "primary_fqn": "model.layers.2.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightRenaming"
+        ]
+      },
+      {
+        "module_fqns": [
+          "model.layers.3.mlp"
+        ],
+        "primary_fqn": "model.layers.3.mlp",
+        "replacement_type": "hyper_parallel.components.modules.swiglu_mlp:SwiGLUMLP",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP",
+        "weight_transforms": [
+          "transformers.core_model_loading:WeightConverter",
+          "transformers.core_model_loading:WeightRenaming"
+        ]
+      }
+    ],
+    "declarations": [
+      {
+        "exact_type": false,
+        "match": [
+          "*.input_layernorm",
+          "*.post_attention_layernorm",
+          "model.norm"
+        ],
+        "order": 0,
+        "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_rms_norm",
+        "rule_id": "plan_override:0:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3RMSNorm",
+        "static_arguments": {}
+      },
+      {
+        "exact_type": false,
+        "match": [
+          "*.self_attn"
+        ],
+        "order": 1,
+        "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_flash_attention",
+        "rule_id": "plan_override:1:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3Attention",
+        "static_arguments": {}
+      },
+      {
+        "exact_type": false,
+        "match": [
+          "*.mlp"
+        ],
+        "order": 2,
+        "replacement_target": "hyper_parallel.models.qwen3.adapter.conversion.module_replacement.replace_qwen3_swiglu_mlp",
+        "rule_id": "plan_override:2:replace",
+        "source_type": "transformers.models.qwen3.modeling_qwen3:Qwen3MLP",
+        "static_arguments": {}
+      }
+    ],
+    "unmatched": []
+  },
+  "snapshot_schema_version": 1,
+  "snapshot_status": "derived",
+  "source": {
+    "architecture": "Qwen3ForCausalLM",
+    "architectures": [],
+    "file_path": "/home/lxy/miniforge3/envs/hyper_restructure_py311/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py",
+    "is_hf_model": true,
+    "line_count": 539,
+    "model_class": "transformers.models.qwen3.modeling_qwen3:Qwen3ForCausalLM",
+    "model_type": "qwen3",
+    "module_name": "transformers.models.qwen3.modeling_qwen3",
+    "pretrained_model_name_or_path": "/home/lxy/probe_ckpts/qwen3",
+    "sha256": "fbdcfeeb1b54135ca67ba7df924da92f4b264e1252b517eea2de989289ebaeab"
+  },
+  "special_handlers": {},
+  "tied_pairs": [],
+  "yaml_path": "",
+  "yaml_sha256": "ec16376019cd3108d73f9b5108fbdff663a27a6f8f7eacaab94c186a456baf9a"
+}
