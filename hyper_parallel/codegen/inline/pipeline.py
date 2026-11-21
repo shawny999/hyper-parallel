@@ -29,6 +29,8 @@ from hyper_parallel.codegen.inline.ir import (
 )
 from hyper_parallel.codegen.inline.meta_plan import normalize_inline_meta
 from hyper_parallel.codegen.inline.definition_edits import drop_shadowed_definitions
+from hyper_parallel.codegen.inline.forward_edits import _parallel_state_prefix
+from hyper_parallel.codegen.emit.parallel import _cp_dispatch_call
 from hyper_parallel.codegen.inline.patch_engine import apply_patch_set
 from hyper_parallel.codegen.inline.framework_spec import (
     replacement_spec_for as replacement_spec,
@@ -101,7 +103,9 @@ def render_inline_modeling_with_plan(
     )
     _add_recorded_forward_host_imports(source_text, patch_set, patch_plan)
     _materialize_imported_forward_hosts(source_text, patch_set)
-    rendered = apply_patch_set(source_text, patch_set)
+    model_class = (getattr(meta, "source", None) or {}).get("model_class")
+    root_class_name = model_class.rsplit(":", 1)[-1].rsplit(".", 1)[-1] if model_class else None
+    rendered = apply_patch_set(source_text, patch_set, root_class_name=root_class_name)
     # The copied modeling source brings its own decorated helpers that share
     # names with the library functions the artifact imports, and a local
     # definition wins over the import: the native path calls the library
@@ -214,29 +218,43 @@ def _materialize_imported_forward_hosts(
         rendered.add(patch.class_name)
         imported = patch_set.imports[import_index]
         other_names = tuple(name for name in imported.names if name != patch.class_name)
-        alias = f"_{patch.class_name}Base"
-        replacement_imports = []
-        if other_names:
-            replacement_imports.append(ImportPatch(imported.module, other_names))
-        replacement_imports.append(ImportPatch(
-            module="",
-            names=(),
-            raw=f"from {imported.module} import {patch.class_name} as {alias}",
-        ))
+        replacement_imports = [ImportPatch(imported.module, other_names)] if other_names else []
+        replacement_imports.append(ImportPatch("", (), raw=f"import {imported.module}"))
         patch_set.imports[import_index:import_index + 1] = replacement_imports
-        body = patch.body.replace(
-            "return self._forward_impl(__hp_forward_args__)",
-            "return super().forward(__hp_forward_args__)",
-        ).replace("__hp_forward_args__", "*args, **kwargs")
+        base = f"{imported.module}.{patch.class_name}"
+        if patch.definition is not None:
+            definition = patch.definition.replace("self._forward_impl(", "super().forward(")
+            snippet = (f"class {patch.class_name}({base}):\n"
+                       + textwrap.indent(definition, "    ") + "\n")
+            patch_set.module_snippets.append(ModuleSnippetPatch(snippet))
+            continue
+        body, local = _imported_forward_source(patch.body)
+        state = _parallel_state_prefix(body)
         snippet = (
-            f"class {patch.class_name}({alias}):\n"
-            "    \"\"\"Generated source-visible parallel form.\"\"\"\n\n"
-            "    cp_enable = False\n\n"
+            f"class {patch.class_name}({base}):\n"
+            f"{state}"
+            f"{local}"
             "    def forward(self, *args, **kwargs):\n"
             f"{textwrap.indent(body.strip(), '        ')}\n"
         )
         patch_set.module_snippets.append(ModuleSnippetPatch(snippet))
     patch_set.forward_extracts = remaining
+
+
+def _imported_forward_source(body: str) -> tuple[str, str]:
+    """Keep a helper's original-method callback separate from its imported host dispatch."""
+    dispatch = _cp_dispatch_call(body)
+    body = body.replace("__hp_forward_args__", "*args, **kwargs").replace(
+        "__hp_forward_positional__", "args",
+    ).replace("__hp_forward_keywords__", "kwargs")
+    if dispatch is not None:
+        local = ("    def _forward_impl(self, *args, **kwargs):\n"
+                 "        return super().forward(*args, **kwargs)\n\n")
+        return body, local
+    body = body.replace("self._forward_impl(", "original_forward(")
+    if "original_forward(" in body:
+        body = "original_forward = super().forward\n" + body
+    return body, ""
 
 
 def render_inline_strategies_for_source_unit(
@@ -379,8 +397,11 @@ def _require_inline_coverage(rules: tuple[Any, ...], model_type: str | None = No
         for target in (rule.local_compute_target, rule.inner_wrapper_target):
             if target is None:
                 continue
+            if target == rule.inner_wrapper_target and rule.observed_wrapper is not None:
+                continue
             if strategy_spec(
-                target, model_type, inner_wrapper=target == rule.inner_wrapper_target
+                target, model_type, inner_wrapper=target == rule.inner_wrapper_target,
+                construction_kwargs=rule.construction_kwargs if target == rule.inner_wrapper_target else (),
             ) is not None:
                 continue
             # An inner_wrapper target has no runtime channel and stays

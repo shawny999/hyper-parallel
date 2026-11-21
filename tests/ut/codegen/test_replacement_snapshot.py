@@ -137,6 +137,10 @@ def test_native_replacement_records_declaration_and_application_once():
     assert application["weight_transforms"] == []
     assert replacement_records_from_snapshot(session.finish()) == (
         {
+            "construction": {
+                "implementation": f"{_ReplacementBlock.__module__}:{_ReplacementBlock.__qualname__}",
+                "source_fqns": ["alias", "primary"],
+            },
             "exact_type": True,
             "factory": f"{_ReplacementBlock.__module__}.{_ReplacementBlock.__qualname__}",
             "fqn": "alias",

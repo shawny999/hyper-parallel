@@ -486,10 +486,11 @@ def _verify_replacement_records(
     for record in records:
         constructor = getattr(record, "factory", None) or record.replacement_type
         name = constructor.__name__
-        visible = name in bound_names and any(
-            isinstance(node, ast.Call) and _call_name(node.func) == name
-            for node in ast.walk(tree)
-        )
+        if name not in bound_names:
+            name = record.replacement_type.__name__
+        calls = [node for node in ast.walk(tree)
+                 if isinstance(node, ast.Call) and _call_name(node.func) == name]
+        visible = name in bound_names and bool(calls) and _replacement_calls_cover_fqn(calls, record.module_fqn)
         if visible:
             _record_materialized(
                 materialized,
@@ -501,6 +502,14 @@ def _verify_replacement_records(
         else:
             missing.append(f"{record.module_fqn} (replacement {name})")
     return missing
+
+
+def _replacement_calls_cover_fqn(calls: list[ast.Call], fqn: str) -> bool:
+    """Require exact coverage when emitted constructors name their observed paths."""
+    explicit = {keyword.value.value for call in calls for keyword in call.keywords
+                if keyword.arg == "module_fqn" and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str) and keyword.value.value}
+    return not explicit or fqn in explicit
 
 
 def _wrapper_identity(record: Any) -> tuple[Any, str, str]:
@@ -523,6 +532,9 @@ def _wrapper_source_form(
     classes: dict[str, ast.ClassDef], host: ast.ClassDef, record: Any, replacements: Any
 ) -> str | None:
     """Return the concrete source form that materializes a wrapper."""
+    definition = getattr(record, "observed_definition", None)
+    if definition is not None:
+        return _observed_method_form(host, definition, getattr(record, "target_type", None))
     if (
         "forward" in _class_methods(host)
         and "cp_enable" in _class_state_names(host)
@@ -551,6 +563,35 @@ def _wrapper_source_form(
     if replacement_backed and {"_forward_impl", "forward"} <= _class_methods(host):
         return "replacement_forward_runtime_binding"
     return None
+
+
+def _observed_method_form(host: ast.ClassDef, definition: str, native_type: type | None) -> str | None:
+    """Verify each observed computation, allowing only the existing boundary extraction."""
+    native_base = f"{native_type.__module__}.{native_type.__name__}" if native_type is not None else ""
+    if any(ast.unparse(base) == native_base for base in host.bases):
+        definition = definition.replace("self._forward_impl(", "super().forward(")
+    methods = {node.name: node for node in host.body if isinstance(node, ast.FunctionDef)}
+    for expected in ast.parse(definition).body:
+        if not isinstance(expected, ast.FunctionDef):
+            return None
+        if ast.get_docstring(expected) is not None:
+            expected.body[0].value.value = ast.get_docstring(expected)
+        candidates = [methods.get(expected.name)]
+        if expected.name == "forward":
+            candidates.append(methods.get("_forward_impl"))
+        matched = False
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            candidate = ast.parse(ast.unparse(candidate)).body[0]
+            candidate.name = expected.name
+            if ast.get_docstring(candidate) is not None:
+                candidate.body[0].value.value = ast.get_docstring(candidate)
+            if ast.dump(candidate) == ast.dump(expected):
+                matched = True
+        if not matched:
+            return None
+    return "observed_native_methods"
 
 
 def _verify_wrapper_records(
@@ -647,19 +688,9 @@ def _tree_has_local_record(tree: ast.AST, record: Any) -> bool:
 def _tree_has_wrapper_record(tree: ast.AST, record: Any, replacements: Any) -> bool:
     """Return whether one source tree materializes an inner-wrapper record."""
     _, class_name, _ = _wrapper_identity(record)
-    host = _class_index(tree).get(class_name)
-    if host is None or "forward" not in _class_methods(host):
-        return False
-    if "cp_enable" in _class_state_names(host) and _class_dispatch_reads_state(
-        host, "cp_enable"
-    ):
-        return True
-    target_type = getattr(record, "target_type", None)
-    replacement_backed = any(
-        item.module_fqn == record.module_fqn and item.replacement_type is target_type
-        for item in replacements
-    )
-    return replacement_backed and {"_forward_impl", "forward"} <= _class_methods(host)
+    classes = _class_index(tree)
+    host = classes.get(class_name)
+    return host is not None and _wrapper_source_form(classes, host, record, replacements) is not None
 
 
 def _class_dispatch_reads_state(host: ast.ClassDef, state_name: str) -> bool:
@@ -799,6 +830,16 @@ def _banner(meta: Any) -> str:
         "#",
         "",
     ]
+    for record in getattr(meta, "module_overrides", None) or ():
+        source_type = (record.get("module_type") or "unknown").rsplit(".", 1)[-1]
+        implementation = (record.get("construction") or {}).get("implementation")
+        target = (implementation or record.get("factory") or record.get("replacement_target") or "unknown")
+        target = target.replace(":", ".", 1).rsplit(".", 1)[-1]
+        for fqn in record.get("fqns") or (record.get("fqn"),):
+            if fqn is not None:
+                lines.insert(-1, f"#   {fqn}: {source_type} -> {target}")
+    if getattr(meta, "module_overrides", None):
+        lines.insert(-1, "#")
     return "\n".join(lines)
 
 

@@ -30,6 +30,9 @@ class SourceObservation:
     construction_kwargs: tuple[str, ...] = ()
     inner_wrapper_target: Optional[str] = None
     local_compute_target: Optional[str] = None
+    observed_wrapper: dict | None = None
+    shared_fqns: tuple[str, ...] = ()
+    construction: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -64,11 +67,13 @@ class ConstructorReplacePatch:
 
     old_ctor: str
     new_ctor: str
-    mode: Literal["name", "wrap_source"] = "name"
+    mode: Literal["name", "wrap_source", "construct", "config"] = "name"
     keyword_args: tuple[str, ...] = ()
     scope_attrs: tuple[str, ...] = ()
     scope_fqns: tuple[str, ...] = ()
     defer_to_fqns: bool = False
+    shared_fqns: tuple[tuple[str, ...], ...] = ()
+    scope_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,7 +83,7 @@ class ForwardExtractPatch:
     class_name: str
     method_name: str
     body: str
-    merge_original_body: bool = False
+    definition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -131,7 +136,7 @@ class StrategySpec:
     method_name: str = "forward"
     body_template: str | None = None
     subclass_shell: str | None = None
-    subclass_state_attr: str | None = None
+    definition: str | None = None
     snippets: tuple[ModuleSnippetPatch, ...] = ()
     strip_boundary_subpatterns: tuple[str, ...] = ()
 
